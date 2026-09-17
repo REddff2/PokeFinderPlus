@@ -1,16 +1,6 @@
 #pragma once
-#include <Core/Global.hpp>
-#include <array>
-struct IVBounds
-{
-    std::array<u8, 6> min {};
-    std::array<u8, 6> max {31,31,31,31,31,31};
-    bool valid() const
-    {
-        for (size_t i=0;i<6;++i) if (min[i]>max[i] || max[i]>31) return false;
-        return true;
-    }
-};
+#include <Core/Gen5/GPU/IVBounds.hpp>
+using IVBounds = GpuWild::IVBounds;
 #include <string>
 #include <vector>
 struct IVDomainCase { std::string name; IVBounds bounds; };

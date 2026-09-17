@@ -92,16 +92,33 @@ Settings::Settings(QWidget *parent) : QWidget(parent), ui(new Ui::Settings)
         }
     }
 
-    // Keep the normal Threads preference independent of Smart Search.
+    // Preserve the existing smart-search key; remove the retired Plus CPU limit.
     setting.remove("plusSearchWorkerLimit");
     const bool smart = setting.value("plusSearchPruning", SearchOptimization::DefaultPruning).toBool();
+    const bool gpu = smart && setting.value("plusSearchGpu", SearchOptimization::DefaultGpu).toBool();
+    if (!smart) setting.setValue("plusSearchGpu", false);
     ui->checkBoxSearchPruning->setChecked(smart);
+    ui->checkBoxSearchGpu->setChecked(gpu);
+    ui->checkBoxSearchGpu->setEnabled(smart);
     SearchOptimization::setPruningEnabled(smart);
+    SearchOptimization::setGpuEnabled(gpu);
     setting.endGroup();
 
-    connect(ui->checkBoxSearchPruning, &QCheckBox::toggled, this, [](bool enabled) {
-        QSettings().setValue("settings/plusSearchPruning", enabled);
+    connect(ui->checkBoxSearchPruning, &QCheckBox::toggled, this, [this](bool enabled) {
+        QSettings settings;
+        settings.setValue("settings/plusSearchPruning", enabled);
         SearchOptimization::setPruningEnabled(enabled);
+        if (!enabled)
+        {
+            ui->checkBoxSearchGpu->setChecked(false);
+            settings.setValue("settings/plusSearchGpu", false);
+        }
+        ui->checkBoxSearchGpu->setEnabled(enabled);
+    });
+    connect(ui->checkBoxSearchGpu, &QCheckBox::toggled, this, [this](bool enabled) {
+        enabled = enabled && ui->checkBoxSearchPruning->isChecked();
+        SearchOptimization::setGpuEnabled(enabled);
+        QSettings().setValue("settings/plusSearchGpu", enabled);
     });
 
     connect(ui->comboBoxLanguage, &QComboBox::currentIndexChanged, this, &Settings::languageIndexChanged);

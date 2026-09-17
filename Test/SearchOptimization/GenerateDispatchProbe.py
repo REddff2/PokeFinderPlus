@@ -13,6 +13,7 @@ for name in ["WildSearcher5CacheFast","WildSearcher5Fast","WildSearcher5"]:
 marker="    searcher->setMaxProgress(searcher->getMaxProgress(start, end));"
 assert source.count(marker)==1
 source=source.replace(marker,'''    auto *ordinary = dynamic_cast<WildSearcher5*>(searcher);
+    IVRangeProbe::row["gpu_session"] = ordinary && ordinary->getGpuSession()!=nullptr;
     IVRangeProbe::row["actual_payload_first"] = ordinary && generator.payloadFirstEnabled(initialIVAdvances,maxIVAdvances);
     IVRangeProbe::row["actual_reduced_mt"] = ordinary && generator.reducedIVsEnabled(initialIVAdvances,maxIVAdvances);
     IVRangeProbe::row["workers_started"] = 0;

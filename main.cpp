@@ -131,6 +131,9 @@ int main(int argc, char *argv[])
     setting.remove("plusSearchWorkerLimit");
     const bool smartSearch = setting.value("plusSearchPruning", SearchOptimization::DefaultPruning).toBool();
     SearchOptimization::setPruningEnabled(smartSearch);
+    const bool gpuSearch = smartSearch && setting.value("plusSearchGpu", SearchOptimization::DefaultGpu).toBool();
+    if (!smartSearch) setting.setValue("plusSearchGpu", false);
+    SearchOptimization::setGpuEnabled(gpuSearch);
 
     QString profilePath = setting.value("profiles").toString();
     bool profile = ProfileLoader::init(profilePath.toStdWString());

@@ -151,6 +151,11 @@
        <property name="text"><string>Enable Gen 5 smart search optimizations</string></property>
        <property name="toolTip"><string>Uses verified Gen 5 search optimizations where supported. Unsupported searches use normal PokeFinder behavior.</string></property>
       </widget></item>
+      <item><widget class="QCheckBox" name="checkBoxSearchGpu">
+       <property name="text"><string>Enable Gen 5 GPU acceleration</string></property>
+       <property name="toolTip"><string>Uses a compatible GPU for supported Gen 5 smart-search workloads. Automatically falls back to the optimized CPU path.</string></property>
+       <property name="enabled"><bool>false</bool></property>
+      </widget></item>
       <item><widget class="QLabel" name="labelSearchOptimizationScope">
        <property name="text"><string>Changes apply to new searches and generation.</string></property>
       </widget></item>

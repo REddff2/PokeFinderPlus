@@ -54,3 +54,21 @@ if(SMART_SEARCH_IV_CACHE AND SMART_SEARCH_SHA_CACHE)
     add_test(NAME WildIVRangeDispatch COMMAND WildIVRangeProbe --dispatch "${CMAKE_CURRENT_BINARY_DIR}"
         "${SMART_SEARCH_IV_CACHE}" "${SMART_SEARCH_SHA_CACHE}")
 endif()
+
+option(GPU_SEARCH_TESTS "Run verified GPU corpus on available NVIDIA and Intel devices" OFF)
+set(SMART_SEARCH_LEGACY_RUNTIME "" CACHE PATH "Legacy helper/kernel fixture for protocol fallback checks")
+if(WIN32)
+    search_check(SearchGpuIntegrationCheck SearchGpuIntegrationCheck.cpp)
+    search_check(WildGpuIVDomainCheck WildGpuIVDomainCheck.cpp BaselineWildGenerator5.cpp)
+    add_dependencies(SearchGpuIntegrationCheck PokeFinderGpuHelper)
+    add_dependencies(WildGpuIVDomainCheck PokeFinderGpuHelper)
+    if(GPU_SEARCH_TESTS)
+        add_test(NAME GpuSearchIntegration COMMAND SearchGpuIntegrationCheck
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/wild-results-full.json" "${CMAKE_CURRENT_BINARY_DIR}/gpu-integration.json")
+        if(SMART_SEARCH_IV_CACHE AND SMART_SEARCH_LEGACY_RUNTIME)
+            add_test(NAME GpuIVDomain COMMAND WildGpuIVDomainCheck
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/wild-results-full.json" "${SMART_SEARCH_IV_CACHE}"
+                "${CMAKE_CURRENT_BINARY_DIR}/gpu-iv-domain.json" "${SMART_SEARCH_LEGACY_RUNTIME}")
+        endif()
+    endif()
+endif()

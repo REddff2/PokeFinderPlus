@@ -315,6 +315,8 @@ add_library(PokeFinderCore STATIC
     RNG/Xoroshiro.hpp
     RNG/Xorshift.cpp
     RNG/Xorshift.hpp
+    Gen5/GPU/Session.cpp
+    Gen5/GPU/Session.hpp
     Util/SearchOptimization.cpp
     Util/SearchOptimization.hpp
     Util/SearchMetrics.hpp
@@ -369,4 +371,9 @@ if (ENABLE_SIMD)
     elseif (MSVC)
         target_compile_options(PokeFinderCore PUBLIC /arch:SSE4.2)
     endif ()
+endif()
+
+# The optional backend loads the system OpenCL driver inside a separate process.
+if(WIN32)
+    configure_file(Gen5/GPU/Gen5Wild.cl "${CMAKE_BINARY_DIR}/Gen5Wild.cl" COPYONLY)
 endif()

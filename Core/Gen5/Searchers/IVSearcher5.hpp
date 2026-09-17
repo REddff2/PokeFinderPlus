@@ -22,6 +22,7 @@
 
 #include <Core/Gen5/Searchers/SearcherBase5.hpp>
 #include <fph/meta_fph_table.h>
+#include <Core/Gen5/GPU/Session.hpp>
 
 /**
  * @brief Parent searcher class for Static/Wild Gen 5 generators
@@ -41,9 +42,13 @@ public:
      * @param generator State generator
      * @param profile Profile information
      */
-    IVSearcher5(u32 initialAdvances, u32 maxAdvances, const Generator &generator, const Profile5 &profile);
+    IVSearcher5(u32 initialAdvances, u32 maxAdvances, const Generator &generator, const Profile5 &profile,
+                std::shared_ptr<GpuWild::Session> gpuSession = {});
+    std::shared_ptr<GpuWild::Session> getGpuSession() const { return gpu; }
 
 private:
+    std::shared_ptr<GpuWild::Session> gpu;
+    bool searchGpu(const Date &start, const Date &end);
     u32 initialAdvances;
     u32 maxAdvances;
 

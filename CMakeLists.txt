@@ -4,7 +4,7 @@ if (APPLE AND NOT DEFINED CMAKE_OSX_ARCHITECTURES)
     set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
 endif()
 
-project(PokeFinder VERSION 1.1.0)
+project(PokeFinder VERSION 1.2.0)
 
 option(TEST "Run Tests" OFF)
 option(ENABLE_SIMD "Enable SIMD" ON)
@@ -33,6 +33,12 @@ endif ()
 add_subdirectory(Model)
 add_subdirectory(Form)
 
+if(WIN32)
+    add_executable(PokeFinderGpuHelper Core/Gen5/GPU/Helper.cpp)
+    target_include_directories(PokeFinderGpuHelper PRIVATE ${CMAKE_SOURCE_DIR}/Core/External)
+    target_link_libraries(PokeFinderGpuHelper PRIVATE Threads::Threads)
+endif()
+
 qt_add_executable(PokeFinder WIN32 MACOSX_BUNDLE MANUAL_FINALIZATION main.cpp)
 
 target_sources(PokeFinder PRIVATE
@@ -53,6 +59,10 @@ target_link_libraries(PokeFinder PRIVATE PokeFinderPlusPluginManager)
 set_target_properties(PokeFinder PROPERTIES OUTPUT_NAME "PokeFinderPlusApp")
 
 include(PokeFinderPlus/Branding.cmake)
+
+if(WIN32)
+    add_dependencies(PokeFinder PokeFinderGpuHelper)
+endif()
 
 qt_finalize_target(PokeFinder)
 

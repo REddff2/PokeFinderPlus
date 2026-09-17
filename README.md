@@ -24,6 +24,8 @@ PokeFinder\
 └─ PokeFinder+\
    ├─ PokeFinder+.exe
    ├─ PokeFinderPlusApp.exe
+   ├─ PokeFinderGpuHelper.exe
+   ├─ Gen5Wild.cl
    ├─ qt.conf
    ├─ plugins.ini
    ├─ plugins\
@@ -39,6 +41,8 @@ No plugins are included with the base PokeFinder+ download.
 ## Smart Search
 
 Optional Gen 5 Smart Search improves supported Event and Wild searches. Enable it in Tools > Settings. It is OFF by default; the normal Threads setting is unchanged.
+
+Optional GPU acceleration is available for supported Gen 5 Wild searches when Smart Search is enabled. It is OFF by default and falls back to CPU Smart Search if unavailable.
 
 ## Source
 

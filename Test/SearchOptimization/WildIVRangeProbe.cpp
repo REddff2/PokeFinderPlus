@@ -109,8 +109,8 @@ int main(int argc,char **argv){
         std::cout<<"CACHE_STATUS "<<child<QLabel>(wild,"labelIVFastSearch")->text().toStdString()<<std::endl;
         json rows=json::array();
         const char *statNames[]={"HP","Atk","Def","SpA","SpD","Spe"};
-        for(int policy=0;policy<2;++policy){
-          SearchOptimization::setPruningEnabled(policy!=0);
+        for(int policy=0;policy<3;++policy){
+          SearchOptimization::setPruningEnabled(policy!=0);SearchOptimization::setGpuEnabled(policy==2);
           for(const auto &c:ivDomainCases()){
             for(size_t stat=0;stat<6;++stat){
                 auto minimum=child<QSpinBox>(*filter,(std::string("spinBox")+statNames[stat]+"Min").c_str());
@@ -121,12 +121,13 @@ int main(int argc,char **argv){
             QElapsedTimer elapsed;elapsed.start();
             check(QMetaObject::invokeMethod(&wild,"search",Qt::DirectConnection),"actual form dispatch probe");
             auto row=IVRangeProbe::row;row["name"]=c.name;row["min"]=c.bounds.min;row["max"]=c.bounds.max;
-            row["policy"]=policy==0?"Smart OFF":"Smart CPU";row["setup_ms"]=elapsed.elapsed();
+            row["policy"]=policy==0?"Smart OFF":policy==1?"Smart CPU":"Smart GPU";row["setup_ms"]=elapsed.elapsed();
             bool cache=row["fastSearchEnabled"].get<bool>();
             check(row["payload_guard"].get<bool>()==(policy!=0),"all legal intervals retain payload eligibility");
             check(row["searcher_class"]==(cache?"WildSearcher5CacheFast":"WildSearcher5"),"normal cache-fast priority");
             check(row["actual_payload_first"].get<bool>()==(!cache&&policy!=0),"ordinary Smart Search dispatch");
-            row["backend"]=cache?"cache-fast":policy==0?"ordinary baseline":"smart CPU";
+            check(row["gpu_session"].get<bool>()==(!cache&&policy==2),"cache priority and GPU dependency respected");
+            row["backend"]=cache?"cache-fast":policy==0?"ordinary baseline":policy==1?"smart CPU":"GPU";
             rows.push_back(row);std::cout<<row.dump()<<std::endl;
           }
         }
