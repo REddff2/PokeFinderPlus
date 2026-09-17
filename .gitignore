@@ -1,0 +1,53 @@
+# CMake
+build*/
+CMakeLists.txt.user*
+
+# VS Code
+.vscode
+
+# VS
+.vs
+CMakeSettings.json
+CppProperties.json
+out
+
+# Python cache files
+*.pyc
+
+# Generated binaries and build products
+__pycache__/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+.ninja_deps
+.ninja_log
+*.obj
+*.o
+*.pdb
+*.idb
+*.ilk
+*.lib
+*.exp
+*.dll
+*.exe
+*.so
+*.dylib
+*.a
+*.ddi
+*.modmap
+*.log
+
+# Packaged output and downloaded archives
+*.zip
+*.7z
+*.tar.gz
+*.tgz
+/PokeFinderPlus/SlotSprites/dist/
+
+# Generated test runs, screenshots, and machine-specific audits
+/PokeFinderPlus/SlotSprites/verification/evidence/
+/PokeFinderPlus/SlotSprites/verification/self-install/
+/PokeFinderPlus/SlotSprites/verification/*.png
+/PokeFinderPlus/SlotSprites/verification/*.json

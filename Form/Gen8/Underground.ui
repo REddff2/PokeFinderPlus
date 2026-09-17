@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Underground</class>
+ <widget class="QWidget" name="Underground">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1200</width>
+    <height>700</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Underground</string>
+  </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0" colspan="3">
+    <widget class="ProfileDisplay8" name="profileDisplay" native="true"/>
+   </item>
+   <item row="1" column="0">
+    <widget class="QGroupBox" name="groupBoxRNGInfo">
+     <property name="title">
+      <string>RNG Info</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_1">
+      <item row="0" column="0">
+       <widget class="QLabel" name="labelLead">
+        <property name="text">
+         <string>Lead</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="ComboMenu" name="comboMenuLead"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="labelSeed0">
+        <property name="text">
+         <string>Seed 0</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="TextBox" name="textBoxSeed0"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="labelSeed1">
+        <property name="text">
+         <string>Seed 1</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="TextBox" name="textBoxSeed1"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="labelInitialAdvances">
+        <property name="text">
+         <string>Initial Advances</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="TextBox" name="textBoxInitialAdvances">
+        <property name="text">
+         <string notr="true">0</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="labelMaxAdvances">
+        <property name="text">
+         <string>Max Advances</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="TextBox" name="textBoxMaxAdvances">
+        <property name="text">
+         <string notr="true">100000</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="labelOffset">
+        <property name="text">
+         <string>Offset</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="TextBox" name="textBoxOffset"/>
+      </item>
+      <item row="6" column="0" colspan="2">
+       <widget class="QPushButton" name="pushButtonGenerate">
+        <property name="text">
+         <string>Generate</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QGroupBox" name="groupBoxSettings">
+     <property name="title">
+      <string>Settings</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="0" column="0">
+       <widget class="QLabel" name="labelStoryFlag">
+        <property name="text">
+         <string>Story Flag</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="comboBoxStoryFlag">
+        <item>
+         <property name="text">
+          <string>Underground Unlocked</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Strength Obtained</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Defog Obtained</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>7 Badges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Waterfall Obtained</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>National Dex</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="labelLevelFlag">
+        <property name="text">
+         <string>Level Flag</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="comboBoxLevelFlag">
+        <item>
+         <property name="text">
+          <string>0/1 Badges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>2 Badges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>3 Badges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>4 Badges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>5 Badges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>6 Badges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>7 Badges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>8 Badges</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>National Dex</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="labelLocation">
+        <property name="text">
+         <string>Location</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="ComboBoxProxy" name="comboBoxLocation"/>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="labelPokemon">
+        <property name="text">
+         <string>Pokémon</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="CheckList" name="checkListPokemon"/>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <widget class="QCheckBox" name="checkBoxDiglett">
+        <property name="text">
+         <string>Diglett Bonus</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QGroupBox" name="groupBoxFilters">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+       <horstretch>1</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="title">
+      <string>Filters</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="Filter" name="filter" native="true"/>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="0" colspan="3">
+    <widget class="TableView" name="tableView"/>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>TextBox</class>
+   <extends>QLineEdit</extends>
+   <header>Form/Controls/TextBox.hpp</header>
+  </customwidget>
+  <customwidget>
+   <class>TableView</class>
+   <extends>QTableView</extends>
+   <header>Form/Controls/TableView.hpp</header>
+  </customwidget>
+  <customwidget>
+   <class>Filter</class>
+   <extends>QWidget</extends>
+   <header>Form/Controls/Filter.hpp</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ComboBoxProxy</class>
+   <extends>QComboBox</extends>
+   <header>Form/Controls/ComboBoxProxy.hpp</header>
+  </customwidget>
+  <customwidget>
+   <class>ComboMenu</class>
+   <extends>QToolButton</extends>
+   <header>Form/Controls/ComboMenu.hpp</header>
+  </customwidget>
+  <customwidget>
+   <class>CheckList</class>
+   <extends>QComboBox</extends>
+   <header>Form/Controls/CheckList.hpp</header>
+  </customwidget>
+  <customwidget>
+   <class>ProfileDisplay8</class>
+   <extends>QWidget</extends>
+   <header>Form/Gen8/Profile/ProfileDisplay8.hpp</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <tabstops>
+  <tabstop>comboMenuLead</tabstop>
+  <tabstop>textBoxSeed0</tabstop>
+  <tabstop>textBoxSeed1</tabstop>
+  <tabstop>textBoxInitialAdvances</tabstop>
+  <tabstop>textBoxMaxAdvances</tabstop>
+  <tabstop>textBoxOffset</tabstop>
+  <tabstop>pushButtonGenerate</tabstop>
+  <tabstop>comboBoxStoryFlag</tabstop>
+  <tabstop>comboBoxLevelFlag</tabstop>
+  <tabstop>comboBoxLocation</tabstop>
+  <tabstop>checkListPokemon</tabstop>
+  <tabstop>checkBoxDiglett</tabstop>
+  <tabstop>tableView</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

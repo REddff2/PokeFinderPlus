@@ -1,0 +1,221 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#ifndef WILDMODEL5_HPP
+#define WILDMODEL5_HPP
+
+#include <Core/Gen5/States/SearcherState5.hpp>
+#include <Core/Gen5/States/WildState5.hpp>
+#include <Model/Gen5/IRNGProvider5.hpp>
+#include <Model/TableModel.hpp>
+
+/**
+ * @brief Provides a table model implementation to show wild encounter information for Gen 5
+ */
+class WildGeneratorModel5 final : public TableModel<WildState5>, public IRNGProvider5
+{
+    Q_OBJECT
+public:
+    /**
+     * @brief Construct a new WildGeneratorModel5 object
+     *
+     * @param parent Parent object, which takes memory ownership
+     */
+    WildGeneratorModel5(QObject *parent);
+
+    /**
+     * @brief Returns the number of columns in the model
+     *
+     * @param parent Unused parent index
+     *
+     * @return Number of columns
+     */
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+
+    /**
+     * @brief Returns data at the \p index with \p role
+     *
+     * @param index Row/column index
+     * @param role Model data role
+     *
+     * @return Data at index
+     */
+    QVariant data(const QModelIndex &index, int role) const override;
+
+    /**
+     * @brief Returns chatot pitch for given \p row
+     *
+     * @return Row chatot pitch
+     */
+    u8 getChatot(int row) const override
+    {
+        return model[row].getChatot();
+    }
+
+    /**
+     * @brief Returns needle value for given \p row
+     *
+     * @return Row needle value
+     */
+    u8 getNeedle(int row) const override
+    {
+        return model[row].getNeedle();
+    }
+
+    /**
+     * @brief Returns header text at the \p section, \p orientation, and \p role
+     *
+     * @param section Column index
+     * @param orientation Header position
+     * @param role Model data role
+     *
+     * @return Header text at column
+     */
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
+
+public slots:
+    /**
+     * @brief Sets flag that controls whether the model display stats or IVs
+     *
+     * @param flag Whether to show stats or not
+     */
+    void setShowStats(bool flag);
+
+    /**
+     * @brief Sets flag that controls whether the model displays moving trigger steps
+     *
+     * @param flag Whether to show moving trigger steps or not
+     */
+    void setShowMovingTrigger(bool flag);
+
+    /**
+     * @brief Sets flag that controls whether the model displays the phenomenon column
+     *
+     * @param flag Whether to show the phenomenon column or not
+     */
+    void setShowPhenomenon(bool flag)
+    {
+        if (showPhenomenon != flag)
+        {
+            beginResetModel();
+            showPhenomenon = flag;
+            endResetModel();
+        }
+    }
+
+private:
+    QStringList header = { tr("Advances"), tr("Chatot"), tr("Needle"), tr("Steps"),  tr("Phenomenon"), tr("Item"),
+                           tr("Slot"),     tr("Level"),  tr("PID"),    tr("Shiny"), tr("Nature"),     tr("Ability"),
+                           tr("HP"),       tr("Atk"),    tr("Def"),    tr("SpA"),   tr("SpD"),        tr("Spe"),
+                           tr("Hidden"),   tr("Power"),  tr("Gender"), tr("Characteristic") };
+    bool showStats;
+    bool showMovingTrigger;
+    bool showPhenomenon;
+};
+
+/**
+ * @brief Provides a table model implementation to show wild encounter information for Gen 5
+ */
+class WildSearcherModel5 final : public TableModel<SearcherState5<WildState5>>
+{
+    Q_OBJECT
+public:
+    /**
+     * @brief Construct a new WildSearcherModel5 object
+     *
+     * @param parent Parent object, which takes memory ownership
+     */
+    WildSearcherModel5(QObject *parent);
+
+    /**
+     * @brief Returns the number of columns in the model
+     *
+     * @param parent Unused parent index
+     *
+     * @return Number of columns
+     */
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+
+    /**
+     * @brief Returns data at the \p index with \p role
+     *
+     * @param index Row/column index
+     * @param role Model data role
+     *
+     * @return Data at index
+     */
+    QVariant data(const QModelIndex &index, int role) const override;
+
+    /**
+     * @brief Returns header text at the \p section, \p orientation, and \p role
+     *
+     * @param section Column index
+     * @param orientation Header position
+     * @param role Model data role
+     *
+     * @return Header text at column
+     */
+    QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
+
+public slots:
+    /**
+     * @brief Sets flag that controls whether the model display stats or IVs
+     *
+     * @param flag Whether to show stats or not
+     */
+    void setShowStats(bool flag);
+
+    /**
+     * @brief Sets flag that controls whether the model displays moving trigger steps
+     *
+     * @param flag Whether to show moving trigger steps or not
+     */
+    void setShowMovingTrigger(bool flag);
+
+    /**
+     * @brief Sets flag that controls whether the model displays the phenomenon column
+     *
+     * @param flag Whether to show the phenomenon column or not
+     */
+    void setShowPhenomenon(bool flag)
+    {
+        if (showPhenomenon != flag)
+        {
+            beginResetModel();
+            showPhenomenon = flag;
+            endResetModel();
+        }
+    }
+
+    void setShowPassPower(bool flag);
+
+private:
+    QStringList header = { tr("Seed"),          tr("Pass Power"), tr("Advances"), tr("Trigger"),      tr("Steps"),
+                           tr("Phenomenon"),    tr("IV Advances"), tr("Item"),    tr("Slot"),         tr("Level"),
+                           tr("PID"),           tr("Shiny"),      tr("Nature"),   tr("Ability"),      tr("HP"),
+                           tr("Atk"),           tr("Def"),        tr("SpA"),      tr("SpD"),          tr("Spe"),
+                           tr("Hidden"),        tr("Power"),      tr("Gender"),   tr("Characteristic"), tr("Date/Time"),
+                           tr("Timer0"),        tr("Buttons") };
+    bool showStats;
+    bool showMovingTrigger;
+    bool showPhenomenon;
+    bool showPassPower;
+};
+
+#endif // WILDMODEL5_HPP

@@ -1,0 +1,415 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#include <Model/ModelIndexMapping.hpp>
+#include "Static4.hpp"
+#include "ui_Static4.h"
+#include <Core/Enum/Game.hpp>
+#include <Core/Enum/Lead.hpp>
+#include <Core/Enum/Method.hpp>
+#include <Core/Gen4/Encounters4.hpp>
+#include <Core/Gen4/Generators/StaticGenerator4.hpp>
+#include <Core/Gen4/Profile4.hpp>
+#include <Core/Gen4/Searchers/StaticSearcher4.hpp>
+#include <Core/Gen4/StaticTemplate4.hpp>
+#include <Core/Parents/ProfileLoader.hpp>
+#include <Core/Util/Translator.hpp>
+#include <Form/Controls/Controls.hpp>
+#include <Form/Gen4/Profile/ProfileManager4.hpp>
+#include <Form/Gen4/Tools/SeedToTime4.hpp>
+#include <Form/Util/AdvanceFinder.hpp>
+#include <Model/Gen4/StaticModel4.hpp>
+#include <Model/SortFilterProxyModel.hpp>
+#include <QAction>
+#include <QSettings>
+#include <QSizePolicy>
+#include <QTimer>
+#include <algorithm>
+#include <vector>
+
+static std::vector<Lead> getSearcherLeads(ComboMenu *comboMenu)
+{
+    auto data = comboMenu->getCheckedData();
+    std::vector<Lead> leads;
+    for (int lead : data)
+    {
+        Lead value = static_cast<Lead>(lead);
+        if (std::find(leads.begin(), leads.end(), value) == leads.end())
+        {
+            leads.emplace_back(value);
+        }
+    }
+    if (leads.empty())
+    {
+        leads.emplace_back(Lead::None);
+    }
+    return leads;
+}
+
+static const QString settingPrefix = QStringLiteral("static4");
+
+Static4::Static4(QWidget *parent) : QWidget(parent), ui(new Ui::Static4)
+{
+    ui->setupUi(this);
+    setAttribute(Qt::WA_QuitOnClose, false);
+
+    ui->profileDisplay->setup(settingPrefix, Game::Gen4);
+
+    generatorModel = new StaticGeneratorModel4(ui->tableViewGenerator);
+    searcherModel = new StaticSearcherModel4(ui->tableViewSearcher);
+    proxyModel = new SortFilterProxyModel(ui->tableViewSearcher, searcherModel);
+
+    ui->tableViewGenerator->setModel(generatorModel);
+    ui->tableViewSearcher->setModel(proxyModel);
+
+    ui->textBoxGeneratorSeed->setValues(InputType::Seed32Bit);
+    ui->textBoxGeneratorInitialAdvances->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorMaxAdvances->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorOffset->setValues(InputType::Advance32Bit);
+
+    ui->textBoxSearcherMinDelay->setValues(InputType::Delay);
+    ui->textBoxSearcherMaxDelay->setValues(InputType::Delay);
+    ui->textBoxSearcherMinAdvance->setValues(InputType::Advance32Bit);
+    ui->textBoxSearcherMaxAdvance->setValues(InputType::Advance32Bit);
+
+    ui->filterGenerator->disableControls(Controls::Height | Controls::Weight | Controls::Wild);
+    ui->filterSearcher->disableControls(Controls::Height | Controls::Searcher | Controls::Weight | Controls::Wild);
+
+    ui->comboMenuGeneratorLead->addAction(tr("None"), toInt(Lead::None));
+    ui->comboMenuGeneratorLead->addMenu(tr("Cute Charm"),
+                                        { { tr("♂ Lead"), toInt(Lead::CuteCharmM) }, { tr("♀ Lead"), toInt(Lead::CuteCharmF) } });
+    ui->comboMenuGeneratorLead->addMenu(tr("Synchronize"), Translator::getNatures());
+
+    ui->comboMenuSearcherLead->addAction(tr("None"), toInt(Lead::None));
+    ui->comboMenuSearcherLead->addMenu(tr("Cute Charm"),
+                                       { { tr("♂ Lead"), toInt(Lead::CuteCharmM) }, { tr("♀ Lead"), toInt(Lead::CuteCharmF) } });
+    ui->comboMenuSearcherLead->addMenu(tr("Synchronize"), Translator::getNatures());
+    ui->comboMenuSearcherLead->setMultiSelect(true);
+    ui->comboMenuSearcherLead->setCheckedData({ toInt(Lead::None) });
+    ui->comboMenuSearcherLead->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+
+    auto *seedToTime = new QAction(tr("Generate times for seed"), ui->tableViewSearcher);
+    connect(seedToTime, &QAction::triggered, this, &Static4::seedToTime);
+    ui->tableViewSearcher->addAction(seedToTime);
+
+    ui->comboBoxGeneratorShiny->setup({ toInt(Shiny::Never), toInt(Shiny::Random) });
+    ui->comboBoxSearcherShiny->setup({ toInt(Shiny::Never), toInt(Shiny::Random) });
+
+    auto *advanceFinder = ui->tableViewGenerator->addAction(tr("Advance Finder"));
+    connect(advanceFinder, &QAction::triggered, this, &Static4::openAdvanceFinder);
+
+    connect(ui->profileDisplay, &ProfileDisplay4::profileChanged, this, &Static4::profileChanged);
+    connect(ui->profileDisplay, &ProfileDisplay4::profilesChanged, this, &Static4::profilesChanged);
+    connect(ui->tabRNGSelector, &TabWidget::transferFilters, this, &Static4::transferFilters);
+    connect(ui->tabRNGSelector, &TabWidget::transferSettings, this, &Static4::transferSettings);
+    connect(ui->pushButtonGenerate, &QPushButton::clicked, this, &Static4::generate);
+    connect(ui->pushButtonSearch, &QPushButton::clicked, this, &Static4::search);
+    connect(ui->comboBoxGeneratorCategory, &QComboBox::currentIndexChanged, this, &Static4::generatorCategoryIndexChanged);
+    connect(ui->comboBoxGeneratorPokemon, &QComboBox::currentIndexChanged, this, &Static4::generatorPokemonIndexChanged);
+    connect(ui->comboBoxSearcherCategory, &QComboBox::currentIndexChanged, this, &Static4::searcherCategoryIndexChanged);
+    connect(ui->comboBoxSearcherPokemon, &QComboBox::currentIndexChanged, this, &Static4::searcherPokemonIndexChanged);
+    connect(ui->filterGenerator, &Filter::showStatsChanged, generatorModel, &StaticGeneratorModel4::setShowStats);
+    connect(ui->filterSearcher, &Filter::showStatsChanged, searcherModel, &StaticSearcherModel4::setShowStats);
+
+    updateProfiles();
+    generatorCategoryIndexChanged(0);
+    searcherCategoryIndexChanged(0);
+
+    QSettings setting;
+    setting.beginGroup(settingPrefix);
+    if (setting.contains("minDelay"))
+    {
+        ui->textBoxSearcherMinDelay->setText(setting.value("minDelay").toString());
+    }
+    if (setting.contains("maxDelay"))
+    {
+        ui->textBoxSearcherMaxDelay->setText(setting.value("maxDelay").toString());
+    }
+    if (setting.contains("minAdvance"))
+    {
+        ui->textBoxSearcherMinAdvance->setText(setting.value("minAdvance").toString());
+    }
+    if (setting.contains("maxAdvance"))
+    {
+        ui->textBoxSearcherMaxAdvance->setText(setting.value("maxAdvance").toString());
+    }
+    if (setting.contains("geometry"))
+    {
+        this->restoreGeometry(setting.value("geometry").toByteArray());
+    }
+    setting.endGroup();
+}
+
+Static4::~Static4()
+{
+    QSettings setting;
+    setting.beginGroup("static4");
+    setting.setValue("minDelay", ui->textBoxSearcherMinDelay->text());
+    setting.setValue("maxDelay", ui->textBoxSearcherMaxDelay->text());
+    setting.setValue("minAdvance", ui->textBoxSearcherMinAdvance->text());
+    setting.setValue("maxAdvance", ui->textBoxSearcherMaxAdvance->text());
+    setting.setValue("geometry", this->saveGeometry());
+    setting.endGroup();
+
+    delete ui;
+}
+
+void Static4::updateProfiles()
+{
+    ui->profileDisplay->updateProfiles();
+}
+
+void Static4::generate()
+{
+    if (!ui->filterGenerator->isValid())
+    {
+        return;
+    }
+
+    generatorModel->clearModel();
+    generatorModel->setGame(currentProfile->getVersion());
+
+    const StaticTemplate4 *staticTemplate
+        = Encounters4::getStaticEncounter(ui->comboBoxGeneratorCategory->currentIndex(), ui->comboBoxGeneratorPokemon->getCurrentInt());
+
+    u32 seed = ui->textBoxGeneratorSeed->getUInt();
+    u32 initialAdvances = ui->textBoxGeneratorInitialAdvances->getUInt();
+    u32 maxAdvances = ui->textBoxGeneratorMaxAdvances->getUInt();
+    u32 offset = ui->textBoxGeneratorOffset->getUInt();
+    auto lead = ui->comboMenuGeneratorLead->getEnum<Lead>();
+
+    auto filter = ui->filterGenerator->getFilter<StateFilter>();
+    StaticGenerator4 generator(initialAdvances, maxAdvances, offset, staticTemplate->getMethod(), lead, *staticTemplate, *currentProfile,
+                               filter);
+
+    auto states = generator.generate(seed);
+    generatorModel->addItems(states);
+}
+
+void Static4::generatorCategoryIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        int size;
+        const StaticTemplate4 *templates = Encounters4::getStaticEncounters(index, &size);
+
+        ui->comboBoxGeneratorPokemon->clear();
+        for (int i = 0; i < size; i++)
+        {
+            if ((currentProfile->getVersion() & templates[i].getVersion()) != Game::None)
+            {
+                ui->comboBoxGeneratorPokemon->addItem(
+                    QString::fromStdString(Translator::getSpecie(templates[i].getSpecie(), templates[i].getForm())),
+                    QVariant::fromValue(i));
+            }
+        }
+    }
+}
+
+void Static4::generatorPokemonIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        const StaticTemplate4 *staticTemplate
+            = Encounters4::getStaticEncounter(ui->comboBoxGeneratorCategory->currentIndex(), ui->comboBoxGeneratorPokemon->getCurrentInt());
+        ui->spinBoxGeneratorLevel->setValue(staticTemplate->getLevel());
+        if (staticTemplate->getMethod() == Method::Method1)
+        {
+            ui->comboMenuGeneratorLead->clearSelection();
+            ui->labelGeneratorLead->hide();
+            ui->comboMenuGeneratorLead->hide();
+        }
+        else
+        {
+            ui->labelGeneratorLead->show();
+            ui->comboMenuGeneratorLead->show();
+
+            bool flag = staticTemplate->getInfo()->getFixedGender();
+            ui->comboMenuGeneratorLead->hideAction(toInt(Lead::CuteCharmF), flag);
+            ui->comboMenuGeneratorLead->hideAction(toInt(Lead::CuteCharmM), flag);
+        }
+
+        ui->comboBoxGeneratorShiny->setCurrentIndex(ui->comboBoxGeneratorShiny->findData(toInt(staticTemplate->getShiny())));
+    }
+}
+
+void Static4::openAdvanceFinder()
+{
+    auto *advanceFinder = new AdvanceFinder(generatorModel, ui->tableViewGenerator, currentProfile, this);
+    advanceFinder->show();
+}
+
+void Static4::profileChanged(const Profile4 &profile)
+{
+    currentProfile = &profile;
+
+    bool hgss = (currentProfile->getVersion() & Game::HGSS) != Game::None;
+
+    // Game Corner
+    ui->comboBoxGeneratorCategory->setItemHidden(3, !hgss);
+    ui->comboBoxSearcherCategory->setItemHidden(3, !hgss);
+
+    generatorCategoryIndexChanged(ui->comboBoxGeneratorCategory->currentIndex());
+    searcherCategoryIndexChanged(ui->comboBoxSearcherCategory->currentIndex());
+}
+
+void Static4::search()
+{
+    if (!ui->filterSearcher->isValid())
+    {
+        return;
+    }
+
+    searcherModel->clearModel();
+
+    ui->pushButtonSearch->setEnabled(false);
+    ui->pushButtonCancel->setEnabled(true);
+
+    std::array<u8, 6> min = ui->filterSearcher->getMinIVs();
+    std::array<u8, 6> max = ui->filterSearcher->getMaxIVs();
+
+    u32 minAdvance = ui->textBoxSearcherMinAdvance->getUInt();
+    u32 maxAdvance = ui->textBoxSearcherMaxAdvance->getUInt();
+    u32 minDelay = ui->textBoxSearcherMinDelay->getUInt();
+    u32 maxDelay = ui->textBoxSearcherMaxDelay->getUInt();
+    auto leads = getSearcherLeads(ui->comboMenuSearcherLead);
+    const StaticTemplate4 *staticTemplate
+        = Encounters4::getStaticEncounter(ui->comboBoxSearcherCategory->currentIndex(), ui->comboBoxSearcherPokemon->getCurrentInt());
+
+    auto filter = ui->filterSearcher->getFilter<StateFilter>();
+    auto *searcher
+        = new StaticSearcher4(minAdvance, maxAdvance, minDelay, maxDelay, staticTemplate->getMethod(), leads, *currentProfile, filter);
+
+    int maxProgress = 1;
+    for (u8 i = 0; i < 6; i++)
+    {
+        maxProgress *= max[i] - min[i] + 1;
+    }
+    searcher->setMaxProgress(maxProgress);
+
+    auto *timer = new QTimer(this);
+    connect(ui->pushButtonCancel, &QPushButton::clicked, timer, [this, searcher] {
+        searcher->cancelSearch();
+        ui->pushButtonCancel->setEnabled(false);
+    });
+    connect(timer, &QTimer::timeout, this, [this, searcher, timer] {
+        searcherModel->addItems(searcher->getResults());
+        ui->progressBar->setValue(searcher->getProgress());
+
+        if (!searcher->isSearching())
+        {
+            timer->stop();
+
+            searcherModel->addItems(searcher->getResults());
+            ui->progressBar->setValue(searcher->getProgress());
+
+            ui->pushButtonSearch->setEnabled(true);
+            ui->pushButtonCancel->setEnabled(false);
+
+            delete searcher;
+            timer->deleteLater();
+        }
+    });
+
+    searcher->startSearch(min, max, staticTemplate);
+    timer->start(1000);
+}
+
+void Static4::searcherCategoryIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        int size;
+        const StaticTemplate4 *templates = Encounters4::getStaticEncounters(index, &size);
+
+        ui->comboBoxSearcherPokemon->clear();
+        for (int i = 0; i < size; i++)
+        {
+            if ((currentProfile->getVersion() & templates[i].getVersion()) != Game::None)
+            {
+                ui->comboBoxSearcherPokemon->addItem(
+                    QString::fromStdString(Translator::getSpecie(templates[i].getSpecie(), templates[i].getForm())),
+                    QVariant::fromValue(i));
+            }
+        }
+    }
+}
+
+void Static4::searcherPokemonIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        const StaticTemplate4 *staticTemplate
+            = Encounters4::getStaticEncounter(ui->comboBoxSearcherCategory->currentIndex(), ui->comboBoxSearcherPokemon->getCurrentInt());
+        ui->spinBoxSearcherLevel->setValue(staticTemplate->getLevel());
+        if (staticTemplate->getMethod() == Method::Method1)
+        {
+            ui->comboMenuSearcherLead->clearSelection();
+            ui->labelSearcherLead->hide();
+            ui->comboMenuSearcherLead->hide();
+        }
+        else
+        {
+            ui->labelSearcherLead->show();
+            ui->comboMenuSearcherLead->show();
+
+            bool flag = staticTemplate->getInfo()->getFixedGender();
+            ui->comboMenuSearcherLead->hideAction(toInt(Lead::CuteCharmF), flag);
+            ui->comboMenuSearcherLead->hideAction(toInt(Lead::CuteCharmM), flag);
+        }
+
+        ui->comboBoxSearcherShiny->setCurrentIndex(ui->comboBoxSearcherShiny->findData(toInt(staticTemplate->getShiny())));
+    }
+}
+
+void Static4::seedToTime()
+{
+    QModelIndex index = ModelIndexMapping::sourceRow(ui->tableViewSearcher->currentIndex());
+    if (!index.isValid()) return;
+    const auto &state = searcherModel->getItem(index.row());
+
+    auto *time = new SeedToTime4(state.getSeed(), currentProfile->getVersion());
+    time->show();
+}
+
+void Static4::transferFilters(int index)
+{
+    if (index == 0)
+    {
+        ui->filterSearcher->copyFrom(ui->filterGenerator);
+    }
+    else
+    {
+        ui->filterGenerator->copyFrom(ui->filterSearcher);
+    }
+}
+
+void Static4::transferSettings(int index)
+{
+    if (index == 0)
+    {
+        ui->comboBoxSearcherCategory->setCurrentIndex(ui->comboBoxGeneratorCategory->currentIndex());
+        ui->comboBoxSearcherPokemon->setCurrentIndex(ui->comboBoxGeneratorPokemon->currentIndex());
+    }
+    else
+    {
+        ui->comboBoxGeneratorCategory->setCurrentIndex(ui->comboBoxSearcherCategory->currentIndex());
+        ui->comboBoxGeneratorPokemon->setCurrentIndex(ui->comboBoxSearcherPokemon->currentIndex());
+    }
+}

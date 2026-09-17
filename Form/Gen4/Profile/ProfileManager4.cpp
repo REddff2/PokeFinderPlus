@@ -1,0 +1,141 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#include "ProfileManager4.hpp"
+#include "ui_ProfileManager4.h"
+#include <Core/Enum/Game.hpp>
+#include <Core/Parents/ProfileLoader.hpp>
+#include <Form/Gen4/Profile/ProfileEditor4.hpp>
+#include <Model/Gen4/ProfileModel4.hpp>
+#include <QAbstractItemView>
+#include <QMessageBox>
+#include <QSettings>
+
+ProfileManager4::ProfileManager4(QWidget *parent) : QWidget(parent), ui(new Ui::ProfileManager4)
+{
+    ui->setupUi(this);
+    setAttribute(Qt::WA_QuitOnClose, false);
+    setAttribute(Qt::WA_DeleteOnClose);
+
+    model = new ProfileModel4(ui->tableView);
+    model->addItems(ProfileLoader4::getProfiles(Game::Gen4));
+    ui->tableView->setModel(model);
+    ui->tableView->setAcceptDrops(true);
+    ui->tableView->setDefaultDropAction(Qt::MoveAction);
+    ui->tableView->setDragDropMode(QAbstractItemView::InternalMove);
+    ui->tableView->setDragDropOverwriteMode(false);
+    ui->tableView->setDragEnabled(true);
+    ui->tableView->setDropIndicatorShown(true);
+    ui->tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->tableView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+    connect(ui->pushButtonNew, &QPushButton::clicked, this, &ProfileManager4::create);
+    connect(ui->pushButtonEdit, &QPushButton::clicked, this, &ProfileManager4::edit);
+    connect(ui->pushButtonDuplicate, &QPushButton::clicked, this, &ProfileManager4::duplicate);
+    connect(ui->pushButtonDelete, &QPushButton::clicked, this, &ProfileManager4::remove);
+    connect(ui->pushButtonOk, &QPushButton::clicked, this, &ProfileManager4::close);
+    connect(model, &ProfileModel4::rowsMoved, this, [this] {
+        ProfileLoader4::setProfiles(model->getModel());
+        emit profilesChanged(4);
+    });
+
+    QSettings setting;
+    if (setting.contains("profileManager4/geometry"))
+    {
+        this->restoreGeometry(setting.value("profileManager4/geometry").toByteArray());
+    }
+}
+
+ProfileManager4::~ProfileManager4()
+{
+    QSettings setting;
+    setting.setValue("profileManager4/geometry", this->saveGeometry());
+
+    delete ui;
+}
+
+void ProfileManager4::create()
+{
+    std::unique_ptr<ProfileEditor4> dialog(new ProfileEditor4);
+    if (dialog->exec() == QDialog::Accepted)
+    {
+        Profile4 profile = dialog->getProfile();
+        ProfileLoader4::addProfile(profile);
+        model->addItem(profile);
+        emit profilesChanged(4);
+    }
+}
+
+void ProfileManager4::duplicate()
+{
+    int row = ui->tableView->currentIndex().row();
+    if (row < 0)
+    {
+        QMessageBox msg(QMessageBox::Warning, tr("No profile selected"), tr("Please select a profile"));
+        msg.exec();
+        return;
+    }
+
+    const Profile4 &profile = model->getItem(row);
+    ProfileLoader4::addProfile(profile);
+    model->addItem(profile);
+    emit profilesChanged(4);
+}
+
+void ProfileManager4::edit()
+{
+    int row = ui->tableView->currentIndex().row();
+    if (row < 0)
+    {
+        QMessageBox msg(QMessageBox::Warning, tr("No profile selected"), tr("Please select a profile"));
+        msg.exec();
+        return;
+    }
+
+    const Profile4 &original = model->getItem(row);
+    std::unique_ptr<ProfileEditor4> dialog(new ProfileEditor4(original));
+    if (dialog->exec() == QDialog::Accepted)
+    {
+        Profile4 update = dialog->getProfile();
+        ProfileLoader4::updateProfile(update, original);
+        model->updateItem(update, row);
+        emit profilesChanged(4);
+    }
+}
+
+void ProfileManager4::remove()
+{
+    int row = ui->tableView->currentIndex().row();
+    if (row < 0)
+    {
+        QMessageBox msg(QMessageBox::Warning, tr("No profile selected"), tr("Please select a profile"));
+        msg.exec();
+        return;
+    }
+
+    QMessageBox msg(QMessageBox::Question, tr("Delete profile"), tr("Are you sure you wish to delete this profile?"),
+                    QMessageBox::Yes | QMessageBox::No);
+    if (msg.exec() == QMessageBox::Yes)
+    {
+        const Profile4 &profile = model->getItem(row);
+        ProfileLoader4::removeProfile(profile);
+        model->removeItem(row);
+        emit profilesChanged(4);
+    }
+}

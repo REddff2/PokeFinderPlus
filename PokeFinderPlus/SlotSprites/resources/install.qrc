@@ -1,0 +1,7 @@
+<RCC><qresource prefix="/slotsprites">
+  <file alias="bootstrap.json">bootstrap.json</file>
+  <file alias="control-names.json">control-names.json</file>
+  <file alias="control-games.json">control-games.json</file>
+  <file alias="control-contracts.json">control-contracts.json</file>
+  <file alias="MINIZ-LICENSE.txt">../vendor/miniz/LICENSE</file>
+</qresource></RCC>

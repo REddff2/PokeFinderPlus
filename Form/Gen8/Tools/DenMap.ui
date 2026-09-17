@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>DenMap</class>
+ <widget class="QWidget" name="DenMap">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>245</width>
+    <height>610</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Den Map</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="labelMap">
+     <property name="minimumSize">
+      <size>
+       <width>227</width>
+       <height>532</height>
+      </size>
+     </property>
+     <property name="scaledContents">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QComboBox" name="comboBoxLocation">
+     <item>
+      <property name="text">
+       <string>Wild Area</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Isle of Armor</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Crown Tundra</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item>
+    <widget class="QComboBox" name="comboBoxDen"/>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

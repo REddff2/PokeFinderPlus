@@ -1,0 +1,352 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#include "GameCube.hpp"
+#include "ui_GameCube.h"
+#include <Core/Enum/Game.hpp>
+#include <Core/Enum/Method.hpp>
+#include <Core/Enum/ShadowType.hpp>
+#include <Core/Gen3/Encounters3.hpp>
+#include <Core/Gen3/Generators/GameCubeGenerator.hpp>
+#include <Core/Gen3/Profile3.hpp>
+#include <Core/Gen3/Searchers/GameCubeSearcher.hpp>
+#include <Core/Gen3/ShadowTemplate.hpp>
+#include <Core/Gen3/StaticTemplate3.hpp>
+#include <Core/Parents/ProfileLoader.hpp>
+#include <Core/Util/Translator.hpp>
+#include <Form/Controls/Controls.hpp>
+#include <Form/Gen3/Profile/ProfileManager3.hpp>
+#include <Model/Gen3/GameCubeModel.hpp>
+#include <Model/SortFilterProxyModel.hpp>
+#include <QSettings>
+#include <QTimer>
+
+static const QString settingPrefix = QStringLiteral("gamecube");
+
+GameCube::GameCube(QWidget *parent) : QWidget(parent), ui(new Ui::GameCube)
+{
+    ui->setupUi(this);
+    setAttribute(Qt::WA_QuitOnClose, false);
+
+    ui->profileDisplay->setup(settingPrefix, Game::GC);
+
+    generatorModel = new GameCubeGeneratorModel(ui->tableViewGenerator);
+    searcherModel = new GameCubeSearcherModel(ui->tableViewSearcher);
+    proxyModel = new SortFilterProxyModel(ui->tableViewSearcher, searcherModel);
+
+    ui->tableViewGenerator->setModel(generatorModel);
+    ui->tableViewSearcher->setModel(proxyModel);
+
+    ui->textBoxGeneratorSeed->setValues(InputType::Seed32Bit);
+    ui->textBoxGeneratorStartingAdvance->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorMaxAdvances->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorOffset->setValues(InputType::Advance32Bit);
+
+    ui->filterGenerator->disableControls(Controls::Height | Controls::Weight | Controls::Wild);
+    ui->filterSearcher->disableControls(Controls::Height | Controls::Searcher | Controls::Weight | Controls::Wild);
+
+    ui->comboBoxGeneratorPokemon->enableAutoComplete();
+    ui->comboBoxSearcherPokemon->enableAutoComplete();
+
+    connect(ui->profileDisplay, &ProfileDisplay3::profileChanged, this, &GameCube::profileChanged);
+    connect(ui->profileDisplay, &ProfileDisplay3::profilesChanged, this, &GameCube::profilesChanged);
+    connect(ui->tabRNGSelector, &TabWidget::transferFilters, this, &GameCube::transferFilters);
+    connect(ui->tabRNGSelector, &TabWidget::transferSettings, this, &GameCube::transferSettings);
+    connect(ui->pushButtonGenerate, &QPushButton::clicked, this, &GameCube::generate);
+    connect(ui->pushButtonSearch, &QPushButton::clicked, this, &GameCube::search);
+    connect(ui->comboBoxGeneratorCategory, &QComboBox::currentIndexChanged, this, &GameCube::generatorCategoryIndexChanged);
+    connect(ui->comboBoxGeneratorPokemon, &QComboBox::currentIndexChanged, this, &GameCube::generatorPokemonIndexChanged);
+    connect(ui->comboBoxSearcherCategory, &QComboBox::currentIndexChanged, this, &GameCube::searcherCategoryIndexChanged);
+    connect(ui->comboBoxSearcherPokemon, &QComboBox::currentIndexChanged, this, &GameCube::searcherPokemonIndexChanged);
+    connect(ui->filterGenerator, &Filter::showStatsChanged, generatorModel, &GameCubeGeneratorModel::setShowStats);
+    connect(ui->filterSearcher, &Filter::showStatsChanged, searcherModel, &GameCubeSearcherModel::setShowStats);
+
+    updateProfiles();
+    generatorCategoryIndexChanged(0);
+    searcherCategoryIndexChanged(0);
+
+    QSettings setting;
+    setting.beginGroup(settingPrefix);
+    if (setting.contains("geometry"))
+    {
+        this->restoreGeometry(setting.value("geometry").toByteArray());
+    }
+    setting.endGroup();
+}
+
+GameCube::~GameCube()
+{
+    QSettings setting;
+    setting.beginGroup(settingPrefix);
+    setting.setValue("geometry", this->saveGeometry());
+    setting.endGroup();
+
+    delete ui;
+}
+
+void GameCube::updateProfiles()
+{
+    ui->profileDisplay->updateProfiles();
+}
+
+void GameCube::generate()
+{
+    if (!ui->filterGenerator->isValid())
+    {
+        return;
+    }
+
+    generatorModel->clearModel();
+
+    Method method = ui->comboBoxGeneratorCategory->currentIndex() == 1 ? Method::Channel : Method::None;
+    bool shadowLock = ui->comboBoxGeneratorCategory->currentIndex() == 2;
+
+    u32 seed = ui->textBoxGeneratorSeed->getUInt();
+    u32 initialAdvances = ui->textBoxGeneratorStartingAdvance->getUInt();
+    u32 maxAdvances = ui->textBoxGeneratorMaxAdvances->getUInt();
+    u32 offset = ui->textBoxGeneratorOffset->getUInt();
+
+    auto filter = ui->filterGenerator->getFilter<StateFilter>();
+    GameCubeGenerator generator(initialAdvances, maxAdvances, offset, method, ui->checkBoxGeneratorFirstShadowUnset->isChecked(),
+                                *currentProfile, filter);
+
+    std::vector<GeneratorState> states;
+    if (shadowLock)
+    {
+        const ShadowTemplate *shadowTemplate = Encounters3::getShadowTeam(ui->comboBoxGeneratorPokemon->getCurrentInt());
+        states = generator.generate(seed, shadowTemplate);
+    }
+    else
+    {
+        const StaticTemplate3 *staticTemplate = Encounters3::getStaticEncounter(ui->comboBoxGeneratorCategory->currentIndex() + 8,
+                                                                                ui->comboBoxGeneratorPokemon->getCurrentInt());
+        states = generator.generate(seed, staticTemplate);
+    }
+
+    generatorModel->addItems(states);
+}
+
+void GameCube::generatorCategoryIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        int size;
+        ui->comboBoxGeneratorPokemon->clear();
+        if (index == 2)
+        {
+            const ShadowTemplate *templates = Encounters3::getShadowTeams(&size);
+            for (int i = 0; i < size; i++)
+            {
+                if ((currentProfile->getVersion() & templates[i].getVersion()) != Game::None)
+                {
+                    ui->comboBoxGeneratorPokemon->addItem(QString::fromStdString(Translator::getSpecie(templates[i].getSpecie())),
+                                                          QVariant::fromValue(i));
+                }
+            }
+        }
+        else
+        {
+            const StaticTemplate3 *templates = Encounters3::getStaticEncounters(index + 8, &size);
+            for (int i = 0; i < size; i++)
+            {
+                if ((currentProfile->getVersion() & templates[i].getVersion()) != Game::None)
+                {
+                    ui->comboBoxGeneratorPokemon->addItem(QString::fromStdString(Translator::getSpecie(templates[i].getSpecie())),
+                                                          QVariant::fromValue(i));
+                }
+            }
+        }
+    }
+}
+
+void GameCube::generatorPokemonIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        if (ui->comboBoxGeneratorCategory->currentIndex() == 2)
+        {
+            const ShadowTemplate *shadowTemplate = Encounters3::getShadowTeam(ui->comboBoxGeneratorPokemon->getCurrentInt());
+            ui->spinBoxGeneratorLevel->setValue(shadowTemplate->getLevel());
+
+            ui->checkBoxGeneratorFirstShadowUnset->setVisible(shadowTemplate->getType() == ShadowType::SecondShadow
+                                                              || shadowTemplate->getType() == ShadowType::Salamence);
+        }
+        else
+        {
+            const StaticTemplate3 *staticTemplate = Encounters3::getStaticEncounter(ui->comboBoxGeneratorCategory->currentIndex() + 8,
+                                                                                    ui->comboBoxGeneratorPokemon->getCurrentInt());
+            ui->spinBoxGeneratorLevel->setValue(staticTemplate->getLevel());
+
+            ui->checkBoxGeneratorFirstShadowUnset->hide();
+        }
+    }
+}
+
+void GameCube::profileChanged(const Profile3 &profile)
+{
+    currentProfile = &profile;
+}
+
+void GameCube::search()
+{
+    if (!ui->filterSearcher->isValid())
+    {
+        return;
+    }
+
+    searcherModel->clearModel();
+
+    Method method = ui->comboBoxSearcherCategory->currentIndex() == 1 ? Method::Channel : Method::None;
+    bool shadowLock = ui->comboBoxSearcherCategory->currentIndex() == 2;
+
+    ui->pushButtonSearch->setEnabled(false);
+    ui->pushButtonCancel->setEnabled(true);
+
+    std::array<u8, 6> min = ui->filterSearcher->getMinIVs();
+    std::array<u8, 6> max = ui->filterSearcher->getMaxIVs();
+
+    auto filter = ui->filterSearcher->getFilter<StateFilter>();
+    auto *searcher = new GameCubeSearcher(method, ui->checkBoxSearcherFirstShadowUnset->isChecked(), *currentProfile, filter);
+
+    int maxProgress = 1;
+    for (u8 i = 0; i < 6; i++)
+    {
+        maxProgress *= max[i] - min[i] + 1;
+    }
+    searcher->setMaxProgress(maxProgress);
+
+    auto *timer = new QTimer(this);
+    connect(ui->pushButtonCancel, &QPushButton::clicked, timer, [this, searcher] {
+        searcher->cancelSearch();
+        ui->pushButtonCancel->setEnabled(false);
+    });
+    connect(timer, &QTimer::timeout, this, [this, searcher, timer] {
+        searcherModel->addItems(searcher->getResults());
+        ui->progressBar->setValue(searcher->getProgress());
+
+        if (!searcher->isSearching())
+        {
+            timer->stop();
+
+            searcherModel->addItems(searcher->getResults());
+            ui->progressBar->setValue(searcher->getProgress());
+
+            ui->pushButtonSearch->setEnabled(true);
+            ui->pushButtonCancel->setEnabled(false);
+
+            delete searcher;
+            timer->deleteLater();
+        }
+    });
+
+    if (shadowLock)
+    {
+        const ShadowTemplate *shadowTemplate = Encounters3::getShadowTeam(ui->comboBoxSearcherPokemon->getCurrentInt());
+        searcher->startSearch(min, max, shadowTemplate);
+    }
+    else
+    {
+        const StaticTemplate3 *staticTemplate = Encounters3::getStaticEncounter(ui->comboBoxSearcherCategory->currentIndex() + 8,
+                                                                                ui->comboBoxSearcherPokemon->getCurrentInt());
+        searcher->startSearch(min, max, staticTemplate);
+    }
+    timer->start(1000);
+}
+
+void GameCube::searcherCategoryIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        int size;
+        ui->comboBoxSearcherPokemon->clear();
+        if (index == 2)
+        {
+            const ShadowTemplate *templates = Encounters3::getShadowTeams(&size);
+            for (int i = 0; i < size; i++)
+            {
+                if ((currentProfile->getVersion() & templates[i].getVersion()) != Game::None)
+                {
+                    ui->comboBoxSearcherPokemon->addItem(QString::fromStdString(Translator::getSpecie(templates[i].getSpecie())),
+                                                         QVariant::fromValue(i));
+                }
+            }
+        }
+        else
+        {
+            const StaticTemplate3 *templates = Encounters3::getStaticEncounters(index + 8, &size);
+            for (int i = 0; i < size; i++)
+            {
+                if ((currentProfile->getVersion() & templates[i].getVersion()) != Game::None)
+                {
+                    ui->comboBoxSearcherPokemon->addItem(QString::fromStdString(Translator::getSpecie(templates[i].getSpecie())),
+                                                         QVariant::fromValue(i));
+                }
+            }
+        }
+    }
+}
+
+void GameCube::searcherPokemonIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        if (ui->comboBoxSearcherCategory->currentIndex() == 2)
+        {
+            const ShadowTemplate *shadowTemplate = Encounters3::getShadowTeam(ui->comboBoxSearcherPokemon->getCurrentInt());
+            ui->spinBoxSearcherLevel->setValue(shadowTemplate->getLevel());
+
+            ui->checkBoxSearcherFirstShadowUnset->setVisible(shadowTemplate->getType() == ShadowType::SecondShadow
+                                                             || shadowTemplate->getType() == ShadowType::Salamence);
+        }
+        else
+        {
+            const StaticTemplate3 *staticTemplate = Encounters3::getStaticEncounter(ui->comboBoxSearcherCategory->currentIndex() + 8,
+                                                                                    ui->comboBoxSearcherPokemon->getCurrentInt());
+            ui->spinBoxSearcherLevel->setValue(staticTemplate->getLevel());
+
+            ui->checkBoxSearcherFirstShadowUnset->hide();
+        }
+    }
+}
+
+void GameCube::transferFilters(int index)
+{
+    if (index == 0)
+    {
+        ui->filterSearcher->copyFrom(ui->filterGenerator);
+    }
+    else
+    {
+        ui->filterGenerator->copyFrom(ui->filterSearcher);
+    }
+}
+
+void GameCube::transferSettings(int index)
+{
+    if (index == 0)
+    {
+        ui->comboBoxSearcherCategory->setCurrentIndex(ui->comboBoxGeneratorCategory->currentIndex());
+        ui->comboBoxSearcherPokemon->setCurrentIndex(ui->comboBoxGeneratorPokemon->currentIndex());
+    }
+    else
+    {
+        ui->comboBoxGeneratorCategory->setCurrentIndex(ui->comboBoxSearcherCategory->currentIndex());
+        ui->comboBoxGeneratorPokemon->setCurrentIndex(ui->comboBoxSearcherPokemon->currentIndex());
+    }
+}

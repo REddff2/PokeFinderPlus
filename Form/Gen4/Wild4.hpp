@@ -1,0 +1,226 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#ifndef WILD4_HPP
+#define WILD4_HPP
+
+#include <Core/Global.hpp>
+#include <QWidget>
+
+class CheckList;
+class EncounterArea4;
+class Profile4;
+class SortFilterProxyModel;
+class WildGeneratorModel4;
+class WildSearcherModel4;
+
+namespace Ui
+{
+    class Wild4;
+}
+
+/**
+ * @brief Provides settings and filters to RNG wild encounters in Gen 4 games
+ */
+class Wild4 final : public QWidget
+{
+    Q_OBJECT
+signals:
+    /**
+     * @brief Emits that the profiles have been changed
+     */
+    void profilesChanged(int);
+
+public:
+    /**
+     * @brief Construct a new Wild4 object
+     *
+     * @param parent Parent widget, which takes memory ownership
+     */
+    Wild4(QWidget *parent = nullptr);
+
+    /**
+     * @brief Destroy the Wild4 object
+     */
+    ~Wild4() override;
+
+public slots:
+    /**
+     * @brief Reloads profiles
+     */
+    void updateProfiles();
+
+private:
+    Ui::Wild4 *ui;
+
+    const Profile4 *currentProfile;
+    SortFilterProxyModel *proxyModel;
+    std::vector<EncounterArea4> encounterGenerator;
+    std::vector<EncounterArea4> encounterSearcher;
+    WildGeneratorModel4 *generatorModel;
+    WildSearcherModel4 *searcherModel;
+    CheckList *checkListSearcherStepOptions;
+
+    /**
+     * @brief Updates generator encounter tables
+     */
+    void updateEncounterGenerator();
+
+    /**
+     * @brief Update searcher encounter tables
+     */
+    void updateEncounterSearcher();
+
+    /**
+     * @brief Updates the generator movement options based on the selected encounter/location
+     */
+    void updateGeneratorMovementOptions();
+
+    /**
+     * @brief Updates the HGSS searcher step encounter option popup
+     */
+    void updateSearcherStepOptions();
+
+    /**
+     * @brief Updates the displayed HGSS searcher step option summary
+     */
+    void updateSearcherStepOptionsText();
+
+    /**
+     * @brief Gets the enabled HGSS searcher step options
+     *
+     * @return Enabled step option bitmask
+     */
+    u16 getSearcherStepOptions() const;
+
+private slots:
+    /**
+     * @brief Generates wild encounters from a starting seed
+     */
+    void generate();
+
+    /**
+     * @brief Updates the locations listed. Also toggles what controls are displayed based on relevance to the current settings.
+     *
+     * @param index Encounter index
+     */
+    void generatorEncounterIndexChanged(int index);
+
+    /**
+     * @brief Updates encounter tables and listed pokemon
+     */
+    void generatorEncounterUpdate();
+
+    /**
+     * @brief Toggles Keen Eye lead level input based on the current lead
+     */
+    void generatorLeadIndexChanged();
+
+    /**
+     * @brief Updates filters for Feebas selection
+     *
+     * @param state Checked state
+     */
+    void generatorFeebasTileStateChanged(Qt::CheckState state);
+
+    /**
+     * @brief Updates the pokemon listed
+     *
+     * @param index Location index
+     */
+    void generatorLocationIndexChanged(int index);
+
+    /**
+     * @brief Updates the encounter slot filter based on the pokemon
+     *
+     * @param index Pokemon index
+     */
+    void generatorPokemonIndexChanged(int index);
+
+    /**
+     * @brief Opens the advance finder dialog
+     */
+    void openAdvanceFinder();
+
+    /**
+     * @brief Updates showing profile related information
+     *
+     * @param profile Selected profile
+     */
+    void profileChanged(const Profile4 &profile);
+
+    /**
+     * @brief Searches static encounters from the provided IVs
+     */
+    void search();
+
+    /**
+     * @brief Updates the locations listed. Also toggles what controls are displayed based on relevance to the current settings.
+     *
+     * @param index Encounter index
+     */
+    void searcherEncounterIndexChanged(int index);
+
+    /**
+     * @brief Updates encounter tables and listed pokemon
+     */
+    void searcherEncounterUpdate();
+
+    /**
+     * @brief Updates filters for Feebas selection
+     *
+     * @param state Checked state
+     */
+    void searcherFeebasTileStateChanged(Qt::CheckState state);
+
+    /**
+     * @brief Updates the pokemon listed
+     *
+     * @param index Location index
+     */
+    void searcherLocationIndexChanged(int index);
+
+    /**
+     * @brief Updates the encounter slot filter based on the pokemon
+     *
+     * @param index Pokemon index
+     */
+    void searcherPokemonIndexChanged(int index);
+
+    /**
+     * @brief Opens seed to time. Provides current game version and seed from the selected tableview row.
+     */
+    void seedToTime();
+
+    /**
+     * @brief Transfers the filters from the active tab to the inactive tab
+     * 
+     * @param index Which tab widget to copy from
+     */
+    void transferFilters(int index);
+
+    /**
+     * @brief Transfers the settings from the active tab to the inactive tab
+     * 
+     * @param index Which tab widget to copy from
+     */
+    void transferSettings(int index);
+};
+
+#endif // WILD4_HPP

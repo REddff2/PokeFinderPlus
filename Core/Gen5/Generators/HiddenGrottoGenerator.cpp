@@ -1,0 +1,331 @@
+﻿/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#include "HiddenGrottoGenerator.hpp"
+#include <Core/Enum/Game.hpp>
+#include <Core/Enum/Lead.hpp>
+#include <Core/Enum/Method.hpp>
+#include <Core/Enum/PassPower.hpp>
+#include <Core/Enum/Shiny.hpp>
+#include <Core/Gen5/HiddenGrottoArea.hpp>
+#include <Core/Gen5/States/HiddenGrottoState.hpp>
+#include <Core/Gen5/States/State5.hpp>
+#include <Core/RNG/LCRNG64.hpp>
+#include <Core/RNG/MT.hpp>
+#include <Core/RNG/RNGList.hpp>
+#include <Core/Util/Utilities.hpp>
+#include <algorithm>
+#include <array>
+#include <vector>
+
+constexpr std::array<u8, 10> encounterThresholds = { 1, 5, 20, 21, 25, 35, 60, 61, 65, 75 };
+constexpr std::array<u8, 4> grottoPowerThresholds = { 10, 20, 30, 50 };
+
+static u8 getEncounterSlot(u8 rand, u8 slot)
+{
+    for (u8 i = 0; i < encounterThresholds.size(); i++)
+    {
+        if (rand < encounterThresholds[i])
+        {
+            return i;
+        }
+    }
+    return slot;
+}
+
+static u8 gen(MT &rng)
+{
+    return rng.next() >> 27;
+}
+
+static u8 getGrottoThreshold(PassPower grottoPower)
+{
+    u8 threshold = 5;
+    if (grottoPower != PassPower::None)
+    {
+        threshold += grottoPowerThresholds[toInt(grottoPower - PassPower::Level1)];
+    }
+    return threshold;
+}
+
+static u8 getGrottoRolls(PassPower grottoPower)
+{
+    return grottoPower == PassPower::None ? 1 : 3;
+}
+
+HiddenGrottoSlotGenerator::HiddenGrottoSlotGenerator(u32 initialAdvances, u32 maxAdvances, u32 offset, PassPower grottoPower,
+                                                     const HiddenGrottoArea &encounterArea, const Profile5 &profile,
+                                                     const HiddenGrottoFilter &filter, u16 item, u8 minItemAmount) :
+    HiddenGrottoSlotGenerator(initialAdvances, maxAdvances, offset, std::vector<PassPower> { grottoPower }, encounterArea, profile, filter,
+                              item, minItemAmount)
+{
+}
+
+HiddenGrottoSlotGenerator::HiddenGrottoSlotGenerator(u32 initialAdvances, u32 maxAdvances, u32 offset,
+                                                     const std::vector<PassPower> &grottoPowers,
+                                                     const HiddenGrottoArea &encounterArea, const Profile5 &profile,
+                                                     const HiddenGrottoFilter &filter, u16 item, u8 minItemAmount) :
+    Generator(initialAdvances, maxAdvances, offset, Method::None, profile, filter),
+    encounterArea(encounterArea),
+    item(item),
+    minItemAmount(minItemAmount),
+    grottoPowers(grottoPowers)
+{
+    if (this->grottoPowers.empty())
+    {
+        this->grottoPowers.emplace_back(PassPower::None);
+    }
+    std::ranges::sort(this->grottoPowers, [](PassPower left, PassPower right) { return toInt(left) < toInt(right); });
+    this->grottoPowers.erase(std::ranges::unique(this->grottoPowers).begin(), this->grottoPowers.end());
+}
+
+std::vector<HiddenGrottoState> HiddenGrottoSlotGenerator::generate(u64 seed) const
+{
+    std::vector<HiddenGrottoState> states;
+    for (PassPower activeGrottoPower : grottoPowers)
+    {
+        auto powerStates = generate(seed, activeGrottoPower);
+        states.reserve(states.size() + powerStates.size());
+        for (const auto &state : powerStates)
+        {
+            auto duplicate = std::ranges::find_if(states, [&state](const HiddenGrottoState &other) {
+                return state.getAdvances() == other.getAdvances() && state.getGroup() == other.getGroup()
+                    && state.getSlot() == other.getSlot() && state.getData() == other.getData()
+                    && state.getItem() == other.getItem() && state.getGender() == other.getGender();
+            });
+            if (duplicate == states.end())
+            {
+                states.emplace_back(state);
+            }
+        }
+    }
+    return states;
+}
+
+std::vector<HiddenGrottoState> HiddenGrottoSlotGenerator::generate(u64 seed, PassPower grottoPower) const
+{
+    u32 advances = Utilities5::initialAdvancesBW2(seed, profile.getMemoryLink());
+    BWRNG rng(seed, advances + initialAdvances);
+    auto jump = rng.getJump(offset);
+    u8 threshold = getGrottoThreshold(grottoPower);
+    u8 rolls = getGrottoRolls(grottoPower);
+    bool searchItemAmount = item != 0 && minItemAmount > 1;
+    u16 itemAmount = 0;
+    u32 lastItemAdvance = 0;
+    std::vector<u32> itemAdvances;
+    HiddenGrottoState firstItem(0, 0, 0, 0, 0);
+
+    std::vector<HiddenGrottoState> states;
+    for (u32 cnt = 0; cnt <= maxAdvances; cnt++)
+    {
+        BWRNG go(rng, jump);
+        u32 prng = rng.nextUInt();
+
+        if (go.nextUInt(100) < threshold)
+        {
+            u8 group = go.nextUInt(4);
+            u8 slot = 10;
+            for (u8 i = 0; i < rolls; i++)
+            {
+                slot = getEncounterSlot(go.nextUInt(100), slot);
+                if (slot < 3)
+                {
+                    break;
+                }
+            }
+
+            if (slot < 3) // Pokemon
+            {
+                auto pokemon = encounterArea.getPokemon(group, slot, profile.getVersion());
+                u8 gender = go.nextUInt(100) < pokemon.getGender();
+                HiddenGrottoState state(prng, advances + initialAdvances + cnt, group, slot, pokemon.getSpecie(), gender, grottoPower);
+                if (!searchItemAmount && filter.compareState(state))
+                {
+                    states.emplace_back(state);
+                }
+            }
+            else if (slot < 7) // Item
+            {
+                u16 item = encounterArea.getItem(group, slot - 3);
+                HiddenGrottoState state(prng, advances + initialAdvances + cnt, group, slot, item, true, grottoPower);
+                if (filter.compareState(state))
+                {
+                    if (searchItemAmount)
+                    {
+                        if (state.getData() == this->item)
+                        {
+                            u32 itemAdvance = state.getAdvances();
+                            if (itemAmount == 0 || itemAdvance > lastItemAdvance + 5)
+                            {
+                                if (itemAmount == 0)
+                                {
+                                    firstItem = state;
+                                }
+                                lastItemAdvance = itemAdvance;
+                                itemAdvances.emplace_back(itemAdvance);
+                                itemAmount++;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        states.emplace_back(state);
+                    }
+                }
+            }
+            else // Hidden item
+            {
+                u16 item = encounterArea.getHiddenItem(group, slot - 7);
+                HiddenGrottoState state(prng, advances + initialAdvances + cnt, group, slot, item, true, grottoPower);
+                if (filter.compareState(state))
+                {
+                    if (searchItemAmount)
+                    {
+                        if (state.getData() == this->item)
+                        {
+                            u32 itemAdvance = state.getAdvances();
+                            if (itemAmount == 0 || itemAdvance > lastItemAdvance + 5)
+                            {
+                                if (itemAmount == 0)
+                                {
+                                    firstItem = state;
+                                }
+                                lastItemAdvance = itemAdvance;
+                                itemAdvances.emplace_back(itemAdvance);
+                                itemAmount++;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        states.emplace_back(state);
+                    }
+                }
+            }
+        }
+        else
+        {
+            states.emplace_back(prng, advances + initialAdvances + cnt);
+        }
+    }
+
+    if (searchItemAmount && itemAmount >= minItemAmount)
+    {
+        firstItem.setAmount(itemAmount);
+        firstItem.setItemAdvances(itemAdvances);
+        states.emplace_back(firstItem);
+    }
+
+    return states;
+}
+
+HiddenGrottoGenerator::HiddenGrottoGenerator(u32 initialAdvances, u32 maxAdvances, u32 offset, Lead lead, u8 gender,
+                                             const HiddenGrottoSlot &slot, const Profile5 &profile, const StateFilter &filter) :
+    Generator(initialAdvances, maxAdvances, offset, Method::None, profile, filter), slot(slot), lead(lead), gender(gender)
+{
+}
+
+std::vector<State5> HiddenGrottoGenerator::generate(u64 seed, u32 initialAdvances, u32 maxAdvances) const
+{
+    bool bw = (profile.getVersion() & Game::BW) != Game::None;
+
+    std::vector<std::pair<u32, std::array<u8, 6>>> ivs;
+
+    RNGList<u8, MT, 8, gen> rngList(seed >> 32, initialAdvances + (bw ? 0 : 2));
+    for (u32 cnt = 0; cnt <= maxAdvances; cnt++, rngList.advanceState())
+    {
+        std::array<u8, 6> iv;
+        std::ranges::generate(iv, [&rngList] { return rngList.next(); });
+        if (filter.compareIV(iv))
+        {
+            ivs.emplace_back(initialAdvances + cnt, iv);
+        }
+    }
+
+    if (ivs.empty())
+    {
+        return std::vector<State5>();
+    }
+    else
+    {
+        return generate(seed, ivs);
+    }
+}
+
+std::vector<State5> HiddenGrottoGenerator::generate(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs) const
+{
+    u32 advances = Utilities5::initialAdvances(seed, profile);
+    BWRNG rng(seed, advances + initialAdvances);
+    auto jump = rng.getJump(offset);
+
+    u8 range = slot.getMaxLevel() - slot.getMinLevel();
+
+    // Even though hidden grotto can't be shiny it still respects the extra rolls from shiny charm
+    // It also respects the extra roll from lucky power but since that choice isn't selectable in the UI we will ignore it
+    u8 shinyRolls = 1;
+    if (profile.getShinyCharm())
+    {
+        shinyRolls += 2;
+    }
+
+    std::vector<State5> states;
+    for (u32 cnt = 0; cnt <= maxAdvances; cnt++)
+    {
+        BWRNG go(rng, jump);
+
+        u8 level = slot.getMinLevel() + go.nextUInt(range);
+
+        // While cute charm is technically possible it would be overwritten by the forced gender so don't check for it
+        // In theory cute charm could cause a 2nd call to be consumed but the UI doesn't allow selecting it
+        bool flag = go.nextUInt(100) < 50;
+        bool sync = flag && lead <= Lead::SynchronizeEnd;
+
+        const PersonalInfo *info = slot.getInfo();
+
+        u32 pid;
+        for (u8 i = 0; i < shinyRolls; i++)
+        {
+            pid = Utilities5::createPID(tsv, 2, !info->getFixedGender() ? gender : 255, Shiny::Never, true, info->getGender(), go);
+        }
+
+        u8 ability = 2;
+        if (info->getAbility(2) == 0)
+        {
+            ability = (pid >> 16) & 1;
+        }
+
+        u8 nature = go.nextUInt(25);
+        if (sync)
+        {
+            nature = toInt(lead);
+        }
+
+        u32 prng = rng.nextUInt();
+        for (const auto &iv : ivs)
+        {
+            State5 state(prng, advances + initialAdvances + cnt, iv.first, pid, iv.second, ability, gender, level, nature, 0, info);
+            if (filter.compareState(static_cast<const State &>(state)))
+            {
+                states.emplace_back(state);
+            }
+        }
+    }
+
+    return states;
+}

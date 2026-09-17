@@ -1,0 +1,342 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#include "Wild8.hpp"
+#include "ui_Wild8.h"
+#include <Core/Enum/Encounter.hpp>
+#include <Core/Enum/Game.hpp>
+#include <Core/Enum/Lead.hpp>
+#include <Core/Enum/Method.hpp>
+#include <Core/Gen8/EncounterArea8.hpp>
+#include <Core/Gen8/Encounters8.hpp>
+#include <Core/Gen8/Generators/WildGenerator8.hpp>
+#include <Core/Gen8/Profile8.hpp>
+#include <Core/Parents/PersonalLoader.hpp>
+#include <Core/Parents/ProfileLoader.hpp>
+#include <Core/Util/Translator.hpp>
+#include <Form/Controls/Controls.hpp>
+#include <Form/Gen8/Profile/ProfileManager8.hpp>
+#include <Model/Gen8/WildModel8.hpp>
+#include <QMessageBox>
+#include <QSettings>
+
+static const QString settingPrefix = QStringLiteral("underground");
+
+Wild8::Wild8(QWidget *parent) : QWidget(parent), ui(new Ui::Wild8)
+{
+    ui->setupUi(this);
+    setAttribute(Qt::WA_QuitOnClose, false);
+
+    ui->profileDisplay->setup(settingPrefix, Game::BDSP);
+
+    model = new WildModel8(ui->tableView);
+    ui->tableView->setModel(model);
+
+    ui->textBoxSeed0->setValues(InputType::Seed64Bit);
+    ui->textBoxSeed1->setValues(InputType::Seed64Bit);
+    ui->textBoxInitialAdvances->setValues(InputType::Advance32Bit);
+    ui->textBoxMaxAdvances->setValues(InputType::Advance32Bit);
+    ui->textBoxOffset->setValues(InputType::Advance32Bit);
+
+    ui->comboMenuLead->addAction(tr("None"), toInt(Lead::None));
+    ui->comboMenuLead->addMenu(tr("Cute Charm"), { { tr("♂ Lead"), toInt(Lead::CuteCharmM) }, { tr("♀ Lead"), toInt(Lead::CuteCharmF) } });
+    ui->comboMenuLead->addMenu(tr("Item Modifier"),
+                               { { tr("Compound Eyes"), toInt(Lead::CompoundEyes) }, { tr("Super Luck"), toInt(Lead::SuperLuck) } });
+    ui->comboMenuLead->addMenu(tr("Level Modifier"),
+                               { { tr("Hustle"), toInt(Lead::Hustle) },
+                                 { tr("Pressure"), toInt(Lead::Pressure) },
+                                 { tr("Vital Spirit"), toInt(Lead::VitalSpirit) } });
+    ui->comboMenuLead->addMenu(tr("Slot Modifier"),
+                               { { tr("Harvest"), toInt(Lead::Harvest) },
+                                 { tr("Flash Fire"), toInt(Lead::FlashFire) },
+                                 { tr("Magnet Pull"), toInt(Lead::MagnetPull) },
+                                 { tr("Static"), toInt(Lead::Static) },
+                                 { tr("Storm Drain"), toInt(Lead::StormDrain) } });
+    ui->comboMenuLead->addMenu(tr("Synchronize"), Translator::getNatures());
+
+    ui->comboBoxEncounter->setup({ toInt(Encounter::Grass), toInt(Encounter::HoneyTree), toInt(Encounter::RockSmash),
+                                   toInt(Encounter::Surfing), toInt(Encounter::OldRod), toInt(Encounter::GoodRod),
+                                   toInt(Encounter::SuperRod) });
+
+    ui->comboBoxLocation->enableAutoComplete();
+
+    connect(ui->profileDisplay, &ProfileDisplay8::profileChanged, this, &Wild8::profileChanged);
+    connect(ui->profileDisplay, &ProfileDisplay8::profilesChanged, this, &Wild8::profilesChanged);
+    connect(ui->pushButtonGenerate, &QPushButton::clicked, this, &Wild8::generate);
+    connect(ui->comboBoxEncounter, &QComboBox::currentIndexChanged, this, &Wild8::encounterIndexChanged);
+    connect(ui->comboBoxLocation, &QComboBox::currentIndexChanged, this, &Wild8::locationIndexChanged);
+    connect(ui->comboBoxPokemon, &QComboBox::currentIndexChanged, this, &Wild8::pokemonIndexChanged);
+    connect(ui->checkBoxFeebasTile, &QCheckBox::checkStateChanged, this, &Wild8::feebasTileStateChanged);
+    connect(ui->comboBoxReplacement0, &QComboBox::currentIndexChanged, this, [this] {
+        if (ui->checkBoxReplacement->isChecked())
+        {
+            updateEncounters();
+            locationIndexChanged(0);
+        }
+    });
+    connect(ui->comboBoxReplacement1, &QComboBox::currentIndexChanged, this, [this] {
+        if (ui->checkBoxReplacement->isChecked())
+        {
+            updateEncounters();
+            locationIndexChanged(0);
+        }
+    });
+    connect(ui->buttonGroup, &QButtonGroup::buttonClicked, this, [this] {
+        updateEncounters();
+        locationIndexChanged(0);
+    });
+    connect(ui->filter, &Filter::showStatsChanged, model, &WildModel8::setShowStats);
+
+    updateProfiles();
+    encounterIndexChanged(0);
+
+    QSettings setting;
+    setting.beginGroup(settingPrefix);
+    if (setting.contains("geometry"))
+    {
+        this->restoreGeometry(setting.value("geometry").toByteArray());
+    }
+    setting.endGroup();
+}
+
+Wild8::~Wild8()
+{
+    QSettings setting;
+    setting.beginGroup(settingPrefix);
+    setting.setValue("geometry", this->saveGeometry());
+    setting.endGroup();
+
+    delete ui;
+}
+
+void Wild8::updateProfiles()
+{
+    ui->profileDisplay->updateProfiles();
+}
+
+void Wild8::updateEncounters()
+{
+    auto encounter = ui->comboBoxEncounter->getEnum<Encounter>();
+
+    EncounterSettings8 settings = { };
+    settings.time = ui->comboBoxTime->currentIndex();
+    if (ui->checkBoxReplacement->isChecked())
+    {
+        settings.replacement[0] = ui->comboBoxReplacement0->getCurrentUShort();
+        settings.replacement[1] = ui->comboBoxReplacement1->count() > 0 ? ui->comboBoxReplacement1->getCurrentUShort() : 0;
+    }
+    settings.feebasTile = ui->checkBoxFeebasTile->isChecked();
+    settings.radar = ui->checkBoxRadar->isChecked();
+    settings.swarm = ui->checkBoxSwarm->isChecked();
+
+    encounters = Encounters8::getEncounters(encounter, settings, currentProfile);
+}
+
+void Wild8::encounterIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        auto encounter = ui->comboBoxEncounter->getEnum<Encounter>();
+        u16 currentLocation = ui->comboBoxLocation->getCurrentUShort();
+
+        bool honey = encounter == Encounter::HoneyTree;
+
+        ui->labelTime->setVisible(!honey);
+        ui->comboBoxTime->setVisible(!honey);
+        ui->checkBoxRadar->setVisible(!honey);
+        ui->checkBoxSwarm->setVisible(!honey);
+
+        ui->comboMenuLead->hideAction(toInt(Lead::CompoundEyes), honey); // Also handles Super Luck
+        ui->comboMenuLead->hideAction(toInt(Lead::Pressure), honey); // Also handles Hustle and Vital Spirit
+        ui->comboMenuLead->hideAction(toInt(Lead::Harvest), honey);
+        ui->comboMenuLead->hideAction(toInt(Lead::FlashFire), honey);
+        ui->comboMenuLead->hideAction(toInt(Lead::MagnetPull), honey);
+        ui->comboMenuLead->hideAction(toInt(Lead::Static), honey);
+        ui->comboMenuLead->hideAction(toInt(Lead::StormDrain), honey);
+
+        updateEncounters();
+
+        std::vector<u16> locs;
+        std::ranges::transform(encounters, std::back_inserter(locs), [](const EncounterArea8 &area) { return area.getLocation(); });
+
+        ui->comboBoxLocation->clear();
+        ui->comboBoxLocation->addItems(Translator::getLocations(locs, currentProfile->getVersion()), locs);
+        ui->comboBoxLocation->setCurrentIndexByData(currentLocation);
+    }
+}
+
+void Wild8::feebasTileStateChanged(Qt::CheckState state)
+{
+    updateEncounters();
+    locationIndexChanged(0);
+}
+
+void Wild8::generate()
+{
+    u64 seed0 = ui->textBoxSeed0->getULong();
+    u64 seed1 = ui->textBoxSeed1->getULong();
+    if (seed0 == 0 && seed1 == 0)
+    {
+        QMessageBox msg(QMessageBox::Warning, tr("Missing seeds"), tr("Please insert missing seed information"));
+        msg.exec();
+        return;
+    }
+
+    if (!ui->filter->isValid(ui->spinBoxLevelMin->value(), ui->spinBoxLevelMax->value()))
+    {
+        return;
+    }
+
+    auto encounter = ui->comboBoxEncounter->getEnum<Encounter>();
+    Method method = Method::None;
+    u8 fixedSlot = 0;
+    if (encounter == Encounter::HoneyTree)
+    {
+        std::array<bool, 13> encounters = ui->filter->getEncounterSlots();
+        if (std::ranges::count(encounters, true) != 1)
+        {
+            QMessageBox msg(QMessageBox::Warning, tr("Too many slots selected"),
+                            tr("Please select a single encounter slot for Honey Tree"));
+            msg.exec();
+            return;
+        }
+        else
+        {
+            method = Method::HoneyTree;
+            fixedSlot = std::ranges::find(encounters, true) - encounters.begin();
+        }
+    }
+
+    model->clearModel();
+
+    u32 initialAdvances = ui->textBoxInitialAdvances->getUInt();
+    u32 maxAdvances = ui->textBoxMaxAdvances->getUInt();
+    u32 offset = ui->textBoxOffset->getUInt();
+    auto lead = ui->comboMenuLead->getEnum<Lead>();
+    bool feebasTile = ui->checkBoxFeebasTile->isChecked();
+
+    auto filter = ui->filter->getFilter<WildStateFilter, true>();
+    WildGenerator8 generator(initialAdvances, maxAdvances, offset, method, lead, feebasTile,
+                             encounters[ui->comboBoxLocation->currentIndex()], *currentProfile, filter);
+
+    auto states = generator.generate(seed0, seed1, fixedSlot);
+    model->addItems(states);
+}
+
+void Wild8::locationIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        auto &area = encounters[ui->comboBoxLocation->currentIndex()];
+        auto species = area.getUniqueSpecies();
+        auto names = area.getSpecieNames();
+        bool feebas = area.feebasLocation(currentProfile->getVersion());
+        bool greatMarsh = area.greatMarsh(currentProfile->getVersion());
+        bool trophyGarden = area.trophyGarden(currentProfile->getVersion());
+        auto encounter = ui->comboBoxEncounter->getEnum<Encounter>();
+
+        ui->filter->setEncounterSlots(area.getCount());
+
+        ui->checkBoxReplacement->setVisible(greatMarsh || trophyGarden);
+        ui->comboBoxReplacement0->setVisible(greatMarsh || trophyGarden);
+        ui->comboBoxReplacement1->setVisible(trophyGarden);
+
+        ui->comboBoxPokemon->clear();
+        ui->comboBoxPokemon->addItem(QString("-"));
+        for (size_t i = 0; i < species.size(); i++)
+        {
+            ui->comboBoxPokemon->addItem(QString::fromStdString(names[i]), species[i]);
+        }
+
+        if (greatMarsh && index != 0)
+        {
+            // Block signals so we don't cause infinite signal recursion
+            ui->comboBoxReplacement0->blockSignals(true);
+
+            ui->comboBoxReplacement0->clear();
+            for (u16 specie : Encounters8::getGreatMarshPokemon(currentProfile))
+            {
+                if (specie == 0)
+                {
+                    break;
+                }
+                ui->comboBoxReplacement0->addItem(QString::fromStdString(Translator::getSpecie(specie)), specie);
+            }
+
+            ui->comboBoxReplacement0->blockSignals(false);
+        }
+        else if (trophyGarden && index != 0)
+        {
+            // Block signals so we don't cause infinite signal recursion
+            ui->comboBoxReplacement0->blockSignals(true);
+            ui->comboBoxReplacement1->blockSignals(true);
+
+            ui->comboBoxReplacement0->clear();
+            ui->comboBoxReplacement1->clear();
+            for (u16 specie : Encounters8::getTrophyGardenPokemon())
+            {
+                const auto &name = Translator::getSpecie(specie);
+                ui->comboBoxReplacement0->addItem(QString::fromStdString(name), specie);
+                ui->comboBoxReplacement1->addItem(QString::fromStdString(name), specie);
+            }
+
+            ui->comboBoxReplacement0->blockSignals(false);
+            ui->comboBoxReplacement1->blockSignals(false);
+        }
+
+        if (feebas && (encounter == Encounter::OldRod || encounter == Encounter::GoodRod || encounter == Encounter::SuperRod))
+        {
+            ui->checkBoxFeebasTile->show();
+        }
+        else
+        {
+            ui->checkBoxFeebasTile->hide();
+            ui->checkBoxFeebasTile->setChecked(false);
+        }
+    }
+}
+
+void Wild8::pokemonIndexChanged(int index)
+{
+    if (index <= 0)
+    {
+        ui->filter->resetEncounterSlots();
+        ui->spinBoxLevelMin->setValue(0);
+        ui->spinBoxLevelMax->setValue(0);
+        ui->filter->setLevelRange(1, 100);
+    }
+    else
+    {
+        u16 num = ui->comboBoxPokemon->getCurrentUShort();
+        auto flags = encounters[ui->comboBoxLocation->currentIndex()].getSlots(num);
+        ui->filter->toggleEncounterSlots(flags);
+
+        auto range = encounters[ui->comboBoxLocation->currentIndex()].getLevelRange(num);
+        ui->spinBoxLevelMin->setValue(range.first);
+        ui->spinBoxLevelMax->setValue(range.second);
+        ui->filter->setLevelRange(range.first, range.second);
+    }
+}
+
+void Wild8::profileChanged(const Profile8 &profile)
+{
+    currentProfile = &profile;
+
+    encounterIndexChanged(0);
+}

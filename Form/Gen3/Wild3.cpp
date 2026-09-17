@@ -1,0 +1,553 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#include <Model/ModelIndexMapping.hpp>
+#include "Wild3.hpp"
+#include "ui_Wild3.h"
+#include <Core/Enum/Encounter.hpp>
+#include <Core/Enum/Game.hpp>
+#include <Core/Enum/Item.hpp>
+#include <Core/Enum/Lead.hpp>
+#include <Core/Enum/Method.hpp>
+#include <Core/Gen3/Encounters3.hpp>
+#include <Core/Gen3/Generators/WildGenerator3.hpp>
+#include <Core/Gen3/Profile3.hpp>
+#include <Core/Gen3/Searchers/WildSearcher3.hpp>
+#include <Core/Parents/ProfileLoader.hpp>
+#include <Core/Util/Nature.hpp>
+#include <Core/Util/Translator.hpp>
+#include <Form/Controls/ComboMenu.hpp>
+#include <Form/Controls/Controls.hpp>
+#include <Form/Gen3/Profile/ProfileManager3.hpp>
+#include <Form/Gen3/Tools/SeedToTime3.hpp>
+#include <Model/Gen3/WildModel3.hpp>
+#include <Model/SortFilterProxyModel.hpp>
+#include <QAction>
+#include <QSettings>
+#include <QSizePolicy>
+#include <QTimer>
+#include <algorithm>
+#include <vector>
+
+static const QString settingPrefix = QStringLiteral("wild3");
+
+static std::vector<Lead> getSearcherLeads(ComboMenu *comboMenu)
+{
+    auto data = comboMenu->getCheckedData();
+    std::vector<Lead> leads;
+    for (int lead : data)
+    {
+        Lead value = static_cast<Lead>(lead);
+        if (!std::ranges::contains(leads, value))
+        {
+            leads.emplace_back(value);
+        }
+    }
+    if (leads.empty())
+    {
+        leads.emplace_back(Lead::None);
+    }
+    return leads;
+}
+
+Wild3::Wild3(QWidget *parent) : QWidget(parent), ui(new Ui::Wild3)
+{
+    ui->setupUi(this);
+    setAttribute(Qt::WA_QuitOnClose, false);
+
+    ui->profileDisplay->setup(settingPrefix, Game::RSE | Game::FRLG);
+
+    generatorModel = new WildGeneratorModel3(ui->tableViewGenerator);
+    searcherModel = new WildSearcherModel3(ui->tableViewSearcher);
+    proxyModel = new SortFilterProxyModel(ui->tableViewSearcher, searcherModel);
+
+    ui->tableViewGenerator->setModel(generatorModel);
+    ui->tableViewSearcher->setModel(proxyModel);
+
+    ui->textBoxGeneratorSeed->setValues(InputType::Seed32Bit);
+    ui->textBoxGeneratorInitialAdvances->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorMaxAdvances->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorOffset->setValues(InputType::Advance32Bit);
+
+    ui->comboBoxGeneratorMethod->setup({ toInt(Method::Method1), toInt(Method::Method2), toInt(Method::Method4) });
+    ui->comboBoxSearcherMethod->setup({ toInt(Method::Method1), toInt(Method::Method2), toInt(Method::Method4) });
+
+    ui->comboBoxGeneratorEncounter->setup({ toInt(Encounter::Grass), toInt(Encounter::RockSmash), toInt(Encounter::Surfing),
+                                            toInt(Encounter::OldRod), toInt(Encounter::GoodRod), toInt(Encounter::SuperRod) });
+    ui->comboBoxSearcherEncounter->setup({ toInt(Encounter::Grass), toInt(Encounter::RockSmash), toInt(Encounter::Surfing),
+                                           toInt(Encounter::OldRod), toInt(Encounter::GoodRod), toInt(Encounter::SuperRod) });
+
+    ui->comboBoxGeneratorItem->setup({ toInt(Item::None), toInt(Item::BlackFlute), toInt(Item::CleanseTag), toInt(Item::WhiteFlute) });
+
+    ui->comboBoxSearcherItem->setup({ toInt(Item::None), toInt(Item::BlackFlute), toInt(Item::CleanseTag), toInt(Item::WhiteFlute) });
+
+    ui->filterGenerator->disableControls(Controls::Height | Controls::Weight);
+    ui->filterSearcher->disableControls(Controls::Height | Controls::Searcher | Controls::Weight);
+
+    ui->comboMenuGeneratorLead->addAction(tr("None"), toInt(Lead::None));
+    ui->comboMenuGeneratorLead->addMenu(tr("Cute Charm"),
+                                        { { tr("♂ Lead"), toInt(Lead::CuteCharmM) }, { tr("♀ Lead"), toInt(Lead::CuteCharmF) } });
+    ui->comboMenuGeneratorLead->addMenu(tr("Level Modifier"),
+                                        { { tr("Hustle"), toInt(Lead::Hustle) },
+                                          { tr("Pressure"), toInt(Lead::Pressure) },
+                                          { tr("Vital Spirit"), toInt(Lead::VitalSpirit) } });
+    ui->comboMenuGeneratorLead->addMenu(tr("Slot Modifier"),
+                                        { { tr("Magnet Pull"), toInt(Lead::MagnetPull) }, { tr("Static"), toInt(Lead::Static) } });
+    ui->comboMenuGeneratorLead->addMenu(tr("Synchronize"), Translator::getNatures());
+
+    ui->comboMenuSearcherLead->addAction(tr("None"), toInt(Lead::None));
+    ui->comboMenuSearcherLead->addMenu(tr("Cute Charm"),
+                                       { { tr("♂ Lead"), toInt(Lead::CuteCharmM) }, { tr("♀ Lead"), toInt(Lead::CuteCharmF) } });
+    ui->comboMenuSearcherLead->addMenu(tr("Level Modifier"),
+                                       { { tr("Hustle"), toInt(Lead::Hustle) },
+                                         { tr("Pressure"), toInt(Lead::Pressure) },
+                                         { tr("Vital Spirit"), toInt(Lead::VitalSpirit) } });
+    ui->comboMenuSearcherLead->addMenu(tr("Slot Modifier"),
+                                       { { tr("Magnet Pull"), toInt(Lead::MagnetPull) }, { tr("Static"), toInt(Lead::Static) } });
+    ui->comboMenuSearcherLead->addMenu(tr("Synchronize"), Translator::getNatures());
+    ui->comboMenuSearcherLead->setMultiSelect(true);
+    ui->comboMenuSearcherLead->setCheckedData({ toInt(Lead::None) });
+    ui->comboMenuSearcherLead->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+
+    ui->comboBoxGeneratorLocation->enableAutoComplete();
+    ui->comboBoxSearcherLocation->enableAutoComplete();
+
+    auto *seedToTime = new QAction(tr("Generate times for seed"), ui->tableViewSearcher);
+    connect(seedToTime, &QAction::triggered, this, &Wild3::seedToTime);
+    ui->tableViewSearcher->addAction(seedToTime);
+
+    connect(ui->profileDisplay, &ProfileDisplay3::profileChanged, this, &Wild3::profileChanged);
+    connect(ui->profileDisplay, &ProfileDisplay3::profilesChanged, this, &Wild3::profilesChanged);
+    connect(ui->tabRNGSelector, &TabWidget::transferFilters, this, &Wild3::transferFilters);
+    connect(ui->tabRNGSelector, &TabWidget::transferSettings, this, &Wild3::transferSettings);
+    connect(ui->pushButtonGenerate, &QPushButton::clicked, this, &Wild3::generate);
+    connect(ui->pushButtonSearch, &QPushButton::clicked, this, &Wild3::search);
+    connect(ui->comboBoxGeneratorEncounter, &QComboBox::currentIndexChanged, this, &Wild3::generatorEncounterIndexChanged);
+    connect(ui->comboBoxSearcherEncounter, &QComboBox::currentIndexChanged, this, &Wild3::searcherEncounterIndexChanged);
+    connect(ui->comboBoxGeneratorLocation, &QComboBox::currentIndexChanged, this, &Wild3::generatorLocationIndexChanged);
+    connect(ui->comboBoxSearcherLocation, &QComboBox::currentIndexChanged, this, &Wild3::searcherLocationIndexChanged);
+    connect(ui->comboBoxGeneratorPokemon, &QComboBox::currentIndexChanged, this, &Wild3::generatorPokemonIndexChanged);
+    connect(ui->comboBoxSearcherPokemon, &QComboBox::currentIndexChanged, this, &Wild3::searcherPokemonIndexChanged);
+    connect(ui->checkBoxGeneratorFeebasTile, &QCheckBox::checkStateChanged, this, &Wild3::generatorFeebasTileStateChanged);
+    connect(ui->checkBoxSearcherFeebasTile, &QCheckBox::checkStateChanged, this, &Wild3::searcherFeebasTileStateChanged);
+    connect(ui->filterGenerator, &Filter::showStatsChanged, generatorModel, &WildGeneratorModel3::setShowStats);
+    connect(ui->filterSearcher, &Filter::showStatsChanged, searcherModel, &WildSearcherModel3::setShowStats);
+
+    updateProfiles();
+    generatorEncounterIndexChanged(0);
+    searcherEncounterIndexChanged(0);
+
+    QSettings setting;
+    setting.beginGroup(settingPrefix);
+    if (setting.contains("geometry"))
+    {
+        this->restoreGeometry(setting.value("geometry").toByteArray());
+    }
+    setting.endGroup();
+}
+
+Wild3::~Wild3()
+{
+    QSettings setting;
+    setting.beginGroup(settingPrefix);
+    setting.setValue("geometry", this->saveGeometry());
+    setting.endGroup();
+
+    delete ui;
+}
+
+void Wild3::updateProfiles()
+{
+    ui->profileDisplay->updateProfiles();
+}
+
+void Wild3::updateEncounterGenerator()
+{
+    auto encounter = ui->comboBoxGeneratorEncounter->getEnum<Encounter>();
+
+    EncounterSettings3 settings = { };
+    settings.feebasTile = ui->checkBoxGeneratorFeebasTile->isChecked();
+
+    encounterGenerator = Encounters3::getEncounters(encounter, settings, currentProfile->getVersion());
+}
+
+void Wild3::updateEncounterSearcher()
+{
+    auto encounter = ui->comboBoxSearcherEncounter->getEnum<Encounter>();
+
+    EncounterSettings3 settings = { };
+    settings.feebasTile = ui->checkBoxSearcherFeebasTile->isChecked();
+
+    encounterSearcher = Encounters3::getEncounters(encounter, settings, currentProfile->getVersion());
+}
+
+void Wild3::generate()
+{
+    if (!ui->filterGenerator->isValid(ui->spinBoxGeneratorLevelMin->value(), ui->spinBoxGeneratorLevelMax->value()))
+    {
+        return;
+    }
+
+    generatorModel->clearModel();
+
+    u32 seed = ui->textBoxGeneratorSeed->getUInt();
+    u32 initialAdvances = ui->textBoxGeneratorInitialAdvances->getUInt();
+    u32 maxAdvances = ui->textBoxGeneratorMaxAdvances->getUInt();
+    u32 offset = ui->textBoxGeneratorOffset->getUInt();
+    auto method = ui->comboBoxGeneratorMethod->getEnum<Method>();
+    auto lead = ui->comboMenuGeneratorLead->getEnum<Lead>();
+    bool feebasTile = ui->checkBoxGeneratorFeebasTile->isChecked();
+    bool bike = ui->checkBoxGeneratorBike->isChecked();
+    auto effect = ui->comboBoxGeneratorItem->getEnum<Item>();
+
+    auto filter = ui->filterGenerator->getFilter<WildStateFilter, true>();
+    WildGenerator3 generator(initialAdvances, maxAdvances, offset, method, lead, feebasTile, bike, effect,
+                             encounterGenerator[ui->comboBoxGeneratorLocation->currentIndex()], *currentProfile, filter);
+
+    auto states = generator.generate(seed);
+    if (ui->filterGenerator->hasActiveFilters(encounterGenerator[ui->comboBoxGeneratorLocation->currentIndex()].getCount()))
+    {
+        std::erase_if(states, [](const auto &state) { return !state.isValid(); });
+    }
+    generatorModel->addItems(states);
+}
+
+void Wild3::generatorEncounterIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        auto encounter = ui->comboBoxGeneratorEncounter->getEnum<Encounter>();
+        u16 currentLocation = ui->comboBoxGeneratorLocation->getCurrentUShort();
+
+        bool magnetPullOption = encounter == Encounter::Grass;
+        bool staticOption = encounter == Encounter::Grass || encounter == Encounter::Surfing;
+        ui->comboMenuGeneratorLead->hideAction(toInt(Lead::MagnetPull), !magnetPullOption);
+        ui->comboMenuGeneratorLead->hideAction(toInt(Lead::Static), !staticOption);
+
+        updateEncounterGenerator();
+
+        std::vector<u16> locs;
+        std::ranges::transform(encounterGenerator, std::back_inserter(locs), [](const EncounterArea3 &area) { return area.getLocation(); });
+
+        ui->comboBoxGeneratorLocation->clear();
+        ui->comboBoxGeneratorLocation->addItems(Translator::getLocations(locs, currentProfile->getVersion()), locs);
+        ui->comboBoxGeneratorLocation->setCurrentIndexByData(currentLocation);
+    }
+}
+
+void Wild3::generatorFeebasTileStateChanged(Qt::CheckState state)
+{
+    updateEncounterGenerator();
+    generatorLocationIndexChanged(0);
+}
+
+void Wild3::generatorLocationIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        auto &area = encounterGenerator[ui->comboBoxGeneratorLocation->currentIndex()];
+        auto species = area.getUniqueSpecies();
+        auto names = area.getSpecieNames();
+
+        ui->filterGenerator->setEncounterSlots(area.getCount());
+
+        auto encounter = ui->comboBoxGeneratorEncounter->getEnum<Encounter>();
+        if (area.feebasLocation(currentProfile->getVersion())
+            && (encounter == Encounter::OldRod || encounter == Encounter::GoodRod || encounter == Encounter::SuperRod))
+        {
+            ui->checkBoxGeneratorFeebasTile->show();
+        }
+        else
+        {
+            ui->checkBoxGeneratorFeebasTile->hide();
+            ui->checkBoxGeneratorFeebasTile->setChecked(false);
+        }
+
+        if ((currentProfile->getVersion() & Game::RSE) != Game::None && encounter == Encounter::RockSmash)
+        {
+            ui->labelGeneratorItem->show();
+            ui->comboBoxGeneratorItem->show();
+            ui->checkBoxGeneratorBike->show();
+        }
+        else
+        {
+            ui->labelGeneratorItem->hide();
+            ui->comboBoxGeneratorItem->hide();
+            ui->comboBoxGeneratorItem->setCurrentIndex(toInt(Item::None));
+            ui->checkBoxGeneratorBike->hide();
+            ui->checkBoxGeneratorBike->setChecked(false);
+        }
+
+        ui->comboBoxGeneratorPokemon->clear();
+        ui->comboBoxGeneratorPokemon->addItem("-");
+        for (size_t i = 0; i < species.size(); i++)
+        {
+            ui->comboBoxGeneratorPokemon->addItem(QString::fromStdString(names[i]), species[i]);
+        }
+    }
+}
+
+void Wild3::generatorPokemonIndexChanged(int index)
+{
+    if (index <= 0)
+    {
+        ui->filterGenerator->resetEncounterSlots();
+        ui->spinBoxGeneratorLevelMin->setValue(0);
+        ui->spinBoxGeneratorLevelMax->setValue(0);
+        ui->filterGenerator->setLevelRange(1, 100);
+    }
+    else
+    {
+        u16 num = ui->comboBoxGeneratorPokemon->getCurrentUShort();
+        auto flags = encounterGenerator[ui->comboBoxGeneratorLocation->currentIndex()].getSlots(num);
+        ui->filterGenerator->toggleEncounterSlots(flags);
+
+        auto range = encounterGenerator[ui->comboBoxGeneratorLocation->currentIndex()].getLevelRange(num);
+        ui->spinBoxGeneratorLevelMin->setValue(range.first);
+        ui->spinBoxGeneratorLevelMax->setValue(range.second);
+        ui->filterGenerator->setLevelRange(range.first, range.second);
+    }
+}
+
+void Wild3::profileChanged(const Profile3 &profile)
+{
+    currentProfile = &profile;
+    if (currentProfile->getDeadBattery())
+    {
+        ui->textBoxGeneratorSeed->setText("5a0");
+    }
+
+    if ((currentProfile->getVersion() & Game::Emerald) != Game::None)
+    {
+        ui->labelGeneratorLead->show();
+        ui->comboMenuGeneratorLead->show();
+
+        ui->labelSearcherLead->show();
+        ui->comboMenuSearcherLead->show();
+    }
+    else
+    {
+        ui->comboMenuGeneratorLead->clearSelection();
+        ui->labelGeneratorLead->hide();
+        ui->comboMenuGeneratorLead->hide();
+
+        ui->comboMenuSearcherLead->clearSelection();
+        ui->labelSearcherLead->hide();
+        ui->comboMenuSearcherLead->hide();
+    }
+
+    generatorEncounterIndexChanged(0);
+    searcherEncounterIndexChanged(0);
+}
+
+void Wild3::search()
+{
+    if (!ui->filterSearcher->isValid(ui->spinBoxSearcherLevelMin->value(), ui->spinBoxSearcherLevelMax->value()))
+    {
+        return;
+    }
+
+    searcherModel->clearModel();
+
+    ui->pushButtonSearch->setEnabled(false);
+    ui->pushButtonCancel->setEnabled(true);
+
+    std::array<u8, 6> min = ui->filterSearcher->getMinIVs();
+    std::array<u8, 6> max = ui->filterSearcher->getMaxIVs();
+    auto method = ui->comboBoxSearcherMethod->getEnum<Method>();
+    auto leads = getSearcherLeads(ui->comboMenuSearcherLead);
+    bool feebas = ui->checkBoxSearcherFeebasTile->isChecked();
+    bool bike = ui->checkBoxSearcherBike->isChecked();
+    auto item = ui->comboBoxSearcherItem->getEnum<Item>();
+
+    auto filter = ui->filterSearcher->getFilter<WildStateFilter, true>();
+    auto *searcher = new WildSearcher3(method, leads, feebas, bike, item, encounterSearcher[ui->comboBoxSearcherLocation->currentIndex()],
+                                       *currentProfile, filter);
+
+    int maxProgress = 1;
+    for (u8 i = 0; i < 6; i++)
+    {
+        maxProgress *= max[i] - min[i] + 1;
+    }
+    searcher->setMaxProgress(maxProgress * static_cast<int>(leads.size()));
+
+    auto *timer = new QTimer(this);
+    connect(ui->pushButtonCancel, &QPushButton::clicked, timer, [this, searcher] {
+        searcher->cancelSearch();
+        ui->pushButtonCancel->setEnabled(false);
+    });
+    connect(timer, &QTimer::timeout, this, [this, searcher, timer] {
+        searcherModel->addItems(searcher->getResults());
+        ui->progressBar->setValue(searcher->getProgress());
+
+        if (!searcher->isSearching())
+        {
+            timer->stop();
+
+            searcherModel->addItems(searcher->getResults());
+            ui->progressBar->setValue(searcher->getProgress());
+
+            ui->pushButtonSearch->setEnabled(true);
+            ui->pushButtonCancel->setEnabled(false);
+
+            delete searcher;
+            timer->deleteLater();
+        }
+    });
+
+    searcher->startSearch(min, max);
+    timer->start(1000);
+}
+
+void Wild3::searcherEncounterIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        auto encounter = ui->comboBoxSearcherEncounter->getEnum<Encounter>();
+        u16 currentLocation = ui->comboBoxSearcherLocation->getCurrentUShort();
+
+        bool magnetPullOption = encounter == Encounter::Grass;
+        bool staticOption = encounter == Encounter::Grass || encounter == Encounter::Surfing;
+        ui->comboMenuSearcherLead->hideAction(toInt(Lead::MagnetPull), !magnetPullOption);
+        ui->comboMenuSearcherLead->hideAction(toInt(Lead::Static), !staticOption);
+
+        updateEncounterSearcher();
+
+        std::vector<u16> locs;
+        std::ranges::transform(encounterSearcher, std::back_inserter(locs), [](const EncounterArea3 &area) { return area.getLocation(); });
+
+        ui->comboBoxSearcherLocation->clear();
+        ui->comboBoxSearcherLocation->addItems(Translator::getLocations(locs, currentProfile->getVersion()), locs);
+        ui->comboBoxSearcherLocation->setCurrentIndexByData(currentLocation);
+    }
+}
+
+void Wild3::searcherFeebasTileStateChanged(Qt::CheckState state)
+{
+    updateEncounterSearcher();
+    searcherLocationIndexChanged(0);
+}
+
+void Wild3::searcherLocationIndexChanged(int index)
+{
+    if (index >= 0)
+    {
+        auto &area = encounterSearcher[ui->comboBoxSearcherLocation->currentIndex()];
+        auto species = area.getUniqueSpecies();
+        auto names = area.getSpecieNames();
+
+        ui->filterSearcher->setEncounterSlots(area.getCount());
+
+        auto encounter = ui->comboBoxSearcherEncounter->getEnum<Encounter>();
+        if (area.feebasLocation(currentProfile->getVersion())
+            && (encounter == Encounter::OldRod || encounter == Encounter::GoodRod || encounter == Encounter::SuperRod))
+        {
+            ui->checkBoxSearcherFeebasTile->show();
+        }
+        else
+        {
+            ui->checkBoxSearcherFeebasTile->hide();
+            ui->checkBoxSearcherFeebasTile->setChecked(false);
+        }
+
+        if ((currentProfile->getVersion() & Game::RSE) != Game::None && encounter == Encounter::RockSmash)
+        {
+            ui->labelSearcherItem->show();
+            ui->comboBoxSearcherItem->show();
+            ui->checkBoxSearcherBike->show();
+        }
+        else
+        {
+            ui->labelSearcherItem->hide();
+            ui->comboBoxSearcherItem->hide();
+            ui->comboBoxSearcherItem->setCurrentIndex(toInt(Item::None));
+            ui->checkBoxSearcherBike->hide();
+            ui->checkBoxSearcherBike->setChecked(false);
+        }
+
+        ui->comboBoxSearcherPokemon->clear();
+        ui->comboBoxSearcherPokemon->addItem("-");
+        for (size_t i = 0; i < species.size(); i++)
+        {
+            ui->comboBoxSearcherPokemon->addItem(QString::fromStdString(names[i]), species[i]);
+        }
+    }
+}
+
+void Wild3::searcherPokemonIndexChanged(int index)
+{
+    if (index <= 0)
+    {
+        ui->filterSearcher->resetEncounterSlots();
+        ui->spinBoxSearcherLevelMin->setValue(0);
+        ui->spinBoxSearcherLevelMax->setValue(0);
+        ui->filterSearcher->setLevelRange(1, 100);
+    }
+    else
+    {
+        u16 num = ui->comboBoxSearcherPokemon->getCurrentUShort();
+        auto flags = encounterSearcher[ui->comboBoxSearcherLocation->currentIndex()].getSlots(num);
+        ui->filterSearcher->toggleEncounterSlots(flags);
+
+        auto range = encounterSearcher[ui->comboBoxSearcherLocation->currentIndex()].getLevelRange(num);
+        ui->spinBoxSearcherLevelMin->setValue(range.first);
+        ui->spinBoxSearcherLevelMax->setValue(range.second);
+        ui->filterSearcher->setLevelRange(range.first, range.second);
+    }
+}
+
+void Wild3::seedToTime()
+{
+    QModelIndex index = ModelIndexMapping::sourceRow(ui->tableViewSearcher->currentIndex());
+    if (!index.isValid()) return;
+    const auto &state = searcherModel->getItem(index.row());
+
+    auto *time = new SeedToTime3(state.getSeed());
+    time->show();
+}
+
+void Wild3::transferFilters(int index)
+{
+    if (index == 0)
+    {
+        ui->filterSearcher->copyFrom(ui->filterGenerator);
+    }
+    else
+    {
+        ui->filterGenerator->copyFrom(ui->filterSearcher);
+    }
+}
+
+void Wild3::transferSettings(int index)
+{
+    if (index == 0)
+    {
+        ui->comboBoxSearcherEncounter->setCurrentIndex(ui->comboBoxGeneratorEncounter->currentIndex());
+        ui->comboBoxSearcherLocation->setCurrentIndex(ui->comboBoxGeneratorLocation->currentIndex());
+        ui->comboBoxSearcherPokemon->setCurrentIndex(ui->comboBoxGeneratorPokemon->currentIndex());
+        ui->checkBoxSearcherFeebasTile->setChecked(ui->checkBoxGeneratorFeebasTile->isChecked());
+    }
+    else
+    {
+        ui->comboBoxGeneratorEncounter->setCurrentIndex(ui->comboBoxSearcherEncounter->currentIndex());
+        ui->comboBoxGeneratorLocation->setCurrentIndex(ui->comboBoxSearcherLocation->currentIndex());
+        ui->comboBoxGeneratorPokemon->setCurrentIndex(ui->comboBoxSearcherPokemon->currentIndex());
+        ui->checkBoxGeneratorFeebasTile->setChecked(ui->checkBoxSearcherFeebasTile->isChecked());
+    }
+}

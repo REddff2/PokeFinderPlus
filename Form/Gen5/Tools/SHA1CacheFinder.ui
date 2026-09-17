@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SHA1CacheFinder</class>
+ <widget class="QWidget" name="SHA1CacheFinder">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>505</width>
+    <height>290</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>SHA1 Cache Finder</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="ProfileDisplay5" name="profileDisplay" native="true"/>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Search</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="labelStartDate">
+        <property name="text">
+         <string>Start Date</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="DateEdit" name="dateEditStartDate"/>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="labelEndDate">
+        <property name="text">
+         <string>End Date</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="DateEdit" name="dateEditEndDate"/>
+      </item>
+      <item row="2" column="0">
+       <widget class="QPushButton" name="pushButtonOutputFile">
+        <property name="text">
+         <string>Output File</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLineEdit" name="lineEditOutputFile">
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0" colspan="2">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="QPushButton" name="pushButtonSearch">
+          <property name="text">
+           <string>Search</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButtonCancel">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="text">
+           <string>Cancel</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QProgressBar" name="progressBar"/>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ProfileDisplay5</class>
+   <extends>QWidget</extends>
+   <header>Form/Gen5/Profile/ProfileDisplay5.hpp</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>DateEdit</class>
+   <extends>QDateEdit</extends>
+   <header>Form/Controls/DateEdit.hpp</header>
+  </customwidget>
+ </customwidgets>
+ <tabstops>
+  <tabstop>dateEditStartDate</tabstop>
+  <tabstop>dateEditEndDate</tabstop>
+  <tabstop>pushButtonOutputFile</tabstop>
+  <tabstop>lineEditOutputFile</tabstop>
+  <tabstop>pushButtonSearch</tabstop>
+  <tabstop>pushButtonCancel</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,140 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#ifndef STATIC3_H
+#define STATIC3_H
+
+#include <QWidget>
+
+class Profile3;
+class SortFilterProxyModel;
+class StaticGeneratorModel3;
+class StaticSearcherModel3;
+
+namespace Ui
+{
+    class Static3;
+}
+
+/**
+ * @brief Provides settings and filters to RNG static encounters in Gen 3 games
+ */
+class Static3 final : public QWidget
+{
+    Q_OBJECT
+signals:
+    /**
+     * @brief Emits that the profiles have been changed
+     */
+    void profilesChanged(int);
+
+public:
+    /**
+     * @brief Construct a new Static3 object
+     *
+     * @param parent Parent widget, which takes memory ownership
+     */
+    Static3(QWidget *parent = nullptr);
+
+    /**
+     * @brief Destroy the Static3 object
+     */
+    ~Static3() override;
+
+public slots:
+    /**
+     * @brief Reloads profiles
+     */
+    void updateProfiles();
+
+private:
+    Ui::Static3 *ui;
+
+    const Profile3 *currentProfile;
+    SortFilterProxyModel *proxyModel;
+    StaticGeneratorModel3 *generatorModel;
+    StaticSearcherModel3 *searcherModel;
+
+private slots:
+    /**
+     * @brief Generates static encounters from a starting seed
+     */
+    void generate();
+
+    /**
+     * @brief Updates the pokemon listed
+     *
+     * @param index Category index
+     */
+    void generatorCategoryIndexChanged(int index);
+
+    /**
+     * @brief Updates the displayed information for a pokemon
+     *
+     * @param index Pokemon index
+     */
+    void generatorPokemonIndexChanged(int index);
+
+    /**
+     * @brief Updates showing profile related information
+     *
+     * @param profile Selected profile
+     */
+    void profileChanged(const Profile3 &profile);
+
+    /**
+     * @brief Searches static encounters from the provided IVs
+     */
+    void search();
+
+    /**
+     * @brief Updates the pokemon listed
+     *
+     * @param index Category index
+     */
+    void searcherCategoryIndexChanged(int index);
+
+    /**
+     * @brief Updates the displayed information for a pokemon
+     *
+     * @param index Pokemon index
+     */
+    void searcherPokemonIndexChanged(int index);
+
+    /**
+     * @brief Opens seed to time.
+     */
+    void seedToTime();
+
+    /**
+     * @brief Transfers the filters from the active tab to the inactive tab
+     * 
+     * @param index Which tab widget to copy from
+     */
+    void transferFilters(int index);
+
+    /**
+     * @brief Transfers the settings from the active tab to the inactive tab
+     * 
+     * @param index Which tab widget to copy from
+     */
+    void transferSettings(int index);
+};
+
+#endif // STATIC3_H

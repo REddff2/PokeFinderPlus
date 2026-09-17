@@ -1,0 +1,308 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#include <Model/ModelIndexMapping.hpp>
+#include "Eggs4.hpp"
+#include "ui_Eggs4.h"
+#include <Core/Enum/Game.hpp>
+#include <Core/Gen4/Generators/EggGenerator4.hpp>
+#include <Core/Gen4/Profile4.hpp>
+#include <Core/Gen4/Searchers/EggSearcher4.hpp>
+#include <Core/Parents/ProfileLoader.hpp>
+#include <Core/Util/Translator.hpp>
+#include <Form/Controls/Controls.hpp>
+#include <Form/Gen4/Profile/ProfileManager4.hpp>
+#include <Form/Gen4/Tools/SeedToTime4.hpp>
+#include <Form/Util/AdvanceFinder.hpp>
+#include <Model/Gen4/EggModel4.hpp>
+#include <Model/SortFilterProxyModel.hpp>
+#include <QAction>
+#include <QMessageBox>
+#include <QSettings>
+#include <QTimer>
+
+static const QString settingPrefix = QStringLiteral("eggs4");
+
+Eggs4::Eggs4(QWidget *parent) : QWidget(parent), ui(new Ui::Eggs4)
+{
+    ui->setupUi(this);
+    setAttribute(Qt::WA_QuitOnClose, false);
+
+    ui->profileDisplay->setup(settingPrefix, Game::Gen4);
+
+    generatorModel = new EggGeneratorModel4(ui->tableViewGenerator);
+    searcherModel = new EggSearcherModel4(ui->tableViewSearcher);
+    proxyModel = new SortFilterProxyModel(ui->tableViewSearcher, searcherModel);
+
+    ui->tableViewGenerator->setModel(generatorModel);
+    ui->tableViewSearcher->setModel(proxyModel);
+
+    ui->textBoxGeneratorSeedHeld->setValues(InputType::Seed32Bit);
+    ui->textBoxGeneratorInitialAdvancesHeld->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorMaxAdvancesHeld->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorOffsetHeld->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorSeedPickup->setValues(InputType::Seed32Bit);
+    ui->textBoxGeneratorInitialAdvancesPickup->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorMaxAdvancesPickup->setValues(InputType::Advance32Bit);
+    ui->textBoxGeneratorOffsetPickup->setValues(InputType::Advance32Bit);
+
+    ui->textBoxSearcherInitialAdvancesHeld->setValues(InputType::Advance32Bit);
+    ui->textBoxSearcherMaxAdvancesHeld->setValues(InputType::Advance32Bit);
+    ui->textBoxSearcherInitialAdvancesPickup->setValues(InputType::Advance32Bit);
+    ui->textBoxSearcherMaxAdvancesPickup->setValues(InputType::Advance32Bit);
+    ui->textBoxSearcherMinDelay->setValues(InputType::Advance32Bit);
+    ui->textBoxSearcherMaxDelay->setValues(InputType::Advance32Bit);
+
+    ui->filterGenerator->disableControls(Controls::Height | Controls::Weight | Controls::Wild);
+    ui->filterSearcher->disableControls(Controls::Height | Controls::Searcher | Controls::Weight | Controls::Wild);
+
+    ui->eggSettingsGenerator->setup(Game::Gen4);
+    ui->eggSettingsSearcher->setup(Game::Gen4);
+
+    poketch = new QAction(tr("Calculate Poketch"), ui->tableViewGenerator);
+    ui->tableViewGenerator->addAction(poketch);
+    poketch->setVisible(false);
+    connect(poketch, &QAction::triggered, this, &Eggs4::calcPoketch);
+
+    auto *seedToTime = new QAction(tr("Generate times for seed"), ui->tableViewSearcher);
+    connect(seedToTime, &QAction::triggered, this, &Eggs4::seedToTime);
+    ui->tableViewSearcher->addAction(seedToTime);
+
+    auto *advanceFinder = ui->tableViewGenerator->addAction(tr("Advance Finder"));
+    connect(advanceFinder, &QAction::triggered, this, &Eggs4::openAdvanceFinder);
+
+    connect(ui->profileDisplay, &ProfileDisplay4::profileChanged, this, &Eggs4::profileChanged);
+    connect(ui->profileDisplay, &ProfileDisplay4::profilesChanged, this, &Eggs4::profilesChanged);
+    connect(ui->tabEggSelection, &TabWidget::transferFilters, this, &Eggs4::transferFilters);
+    connect(ui->tabEggSelection, &TabWidget::transferSettings, this, &Eggs4::transferSettings);
+    connect(ui->pushButtonGenerate, &QPushButton::clicked, this, &Eggs4::generate);
+    connect(ui->pushButtonSearch, &QPushButton::clicked, this, &Eggs4::search);
+    connect(ui->eggSettingsGenerator, &EggSettings::showInheritanceChanged, generatorModel, &EggGeneratorModel4::setShowInheritance);
+    connect(ui->eggSettingsSearcher, &EggSettings::showInheritanceChanged, searcherModel, &EggSearcherModel4::setShowInheritance);
+    connect(ui->filterGenerator, &Filter::showStatsChanged, generatorModel, &EggGeneratorModel4::setShowStats);
+    connect(ui->filterSearcher, &Filter::showStatsChanged, searcherModel, &EggSearcherModel4::setShowStats);
+
+    updateProfiles();
+
+    QSettings setting;
+    setting.beginGroup(settingPrefix);
+    if (setting.contains("geometry"))
+    {
+        this->restoreGeometry(setting.value("geometry").toByteArray());
+    }
+    setting.endGroup();
+}
+
+Eggs4::~Eggs4()
+{
+    QSettings setting;
+    setting.beginGroup(settingPrefix);
+    setting.setValue("geometry", this->saveGeometry());
+    setting.endGroup();
+
+    delete ui;
+}
+
+void Eggs4::updateProfiles()
+{
+    ui->profileDisplay->updateProfiles();
+}
+
+void Eggs4::calcPoketch()
+{
+    QModelIndex index = ModelIndexMapping::sourceRow(ui->tableViewGenerator->currentIndex());
+    if (!index.isValid()) return;
+    const auto &state = generatorModel->getItem(index.row());
+    u32 advances = state.getAdvances();
+
+    u32 coin = 0;
+    u32 happy = 0;
+    QString note;
+
+    if (advances < 12)
+    {
+        coin = advances;
+        note = tr("Do not switch to the happiness application at all");
+    }
+    else
+    {
+        u32 target = advances - 12;
+        happy = target / 12;
+        coin = target % 12;
+
+        if (happy == 0)
+        {
+            note = tr("Switch to the happiness application once but do not click");
+        }
+    }
+
+    QStringList info = { tr("Happiness Application Double Taps: %1").arg(happy), tr("Coin Flip Application Taps: %1").arg(coin) };
+    if (!note.isEmpty())
+    {
+        info.emplace_back(note);
+    }
+
+    QMessageBox msg(QMessageBox::Information, tr("Poketch Taps"), info.join('\n'));
+    msg.exec();
+}
+
+void Eggs4::generate()
+{
+    if (!ui->eggSettingsGenerator->isValid())
+    {
+        return;
+    }
+
+    if (!ui->filterGenerator->isValid())
+    {
+        return;
+    }
+
+    generatorModel->clearModel();
+    generatorModel->setVersion(currentProfile->getVersion());
+
+    if ((currentProfile->getVersion() & Game::DPPt) != Game::None)
+    {
+        poketch->setVisible(true);
+    }
+    else
+    {
+        poketch->setVisible(false);
+    }
+
+    u32 seedHeld = ui->textBoxGeneratorSeedHeld->getUInt();
+    u32 initialAdvancesHeld = ui->textBoxGeneratorInitialAdvancesHeld->getUInt();
+    u32 maxAdvancesHeld = ui->textBoxGeneratorMaxAdvancesHeld->getUInt();
+    u32 offsetHeld = ui->textBoxGeneratorOffsetHeld->getUInt();
+    u32 seedPickup = ui->textBoxGeneratorSeedPickup->getUInt();
+    u32 initialAdvancesPickup = ui->textBoxGeneratorInitialAdvancesPickup->getUInt();
+    u32 maxAdvancesPickup = ui->textBoxGeneratorMaxAdvancesPickup->getUInt();
+    u32 offsetPickup = ui->textBoxGeneratorOffsetPickup->getUInt();
+
+    auto filter = ui->filterGenerator->getFilter<StateFilter>();
+    EggGenerator4 generator(initialAdvancesHeld, maxAdvancesHeld, offsetHeld, initialAdvancesPickup, maxAdvancesPickup, offsetPickup,
+                            ui->eggSettingsGenerator->getDaycare(), *currentProfile, filter);
+
+    auto states = generator.generate(seedHeld, seedPickup);
+    generatorModel->addItems(states);
+}
+
+void Eggs4::openAdvanceFinder()
+{
+    auto *advanceFinder = new AdvanceFinder(generatorModel, ui->tableViewGenerator, currentProfile, this);
+    advanceFinder->show();
+}
+
+void Eggs4::profileChanged(const Profile4 &profile)
+{
+    currentProfile = &profile;
+}
+
+void Eggs4::search()
+{
+    if (!ui->eggSettingsSearcher->isValid())
+    {
+        return;
+    }
+
+    if (!ui->filterSearcher->isValid())
+    {
+        return;
+    }
+
+    searcherModel->clearModel();
+
+    ui->pushButtonSearch->setEnabled(false);
+    ui->pushButtonCancel->setEnabled(true);
+
+    u32 initialAdvancesHeld = ui->textBoxSearcherInitialAdvancesHeld->getUInt();
+    u32 maxAdvancesHeld = ui->textBoxSearcherMaxAdvancesHeld->getUInt();
+    u32 initialAdvancesPickup = ui->textBoxSearcherInitialAdvancesPickup->getUInt();
+    u32 maxAdvancesPickup = ui->textBoxSearcherMaxAdvancesPickup->getUInt();
+    u32 minDelay = ui->textBoxSearcherMinDelay->getUInt();
+    u32 maxDelay = ui->textBoxSearcherMaxDelay->getUInt();
+
+    auto filter = ui->filterSearcher->getFilter<StateFilter>();
+    EggGenerator4 generator(initialAdvancesHeld, maxAdvancesHeld, 0, initialAdvancesPickup, maxAdvancesPickup, 0,
+                            ui->eggSettingsSearcher->getDaycare(), *currentProfile, filter);
+
+    auto *searcher = new EggSearcher4(minDelay, maxDelay, *currentProfile);
+    searcher->setMaxProgress(256 * 24 * (maxDelay - minDelay + 1));
+
+    auto *timer = new QTimer(this);
+    connect(ui->pushButtonCancel, &QPushButton::clicked, timer, [this, searcher] {
+        searcher->cancelSearch();
+        ui->pushButtonCancel->setEnabled(false);
+    });
+    connect(timer, &QTimer::timeout, this, [this, searcher, timer] {
+        searcherModel->addItems(searcher->getResults());
+        ui->progressBar->setValue(searcher->getProgress());
+
+        if (!searcher->isSearching())
+        {
+            timer->stop();
+
+            searcherModel->addItems(searcher->getResults());
+            ui->progressBar->setValue(searcher->getProgress());
+
+            ui->pushButtonSearch->setEnabled(true);
+            ui->pushButtonCancel->setEnabled(false);
+
+            delete searcher;
+            timer->deleteLater();
+        }
+    });
+
+    searcher->startSearch(generator);
+    timer->start(1000);
+}
+
+void Eggs4::seedToTime()
+{
+    QModelIndex index = ModelIndexMapping::sourceRow(ui->tableViewSearcher->currentIndex());
+    if (!index.isValid()) return;
+    const auto &state = searcherModel->getItem(index.row());
+
+    auto *time = new SeedToTime4(state.getSeed(), currentProfile->getVersion());
+    time->show();
+}
+
+void Eggs4::transferFilters(int index)
+{
+    if (index == 0)
+    {
+        ui->filterSearcher->copyFrom(ui->filterGenerator);
+    }
+    else
+    {
+        ui->filterGenerator->copyFrom(ui->filterSearcher);
+    }
+}
+
+void Eggs4::transferSettings(int index)
+{
+    if (index == 0)
+    {
+        ui->eggSettingsSearcher->copyFrom(ui->eggSettingsGenerator);
+    }
+    else
+    {
+        ui->eggSettingsGenerator->copyFrom(ui->eggSettingsSearcher);
+    }
+}
