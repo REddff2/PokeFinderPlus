@@ -48,7 +48,8 @@ ProfileSearcher5::ProfileSearcher5(const Date &date, const Time &time, u8 minSec
 
 void ProfileSearcher5::startSearch(int threads, u8 minVFrame, u8 maxVFrame)
 {
-    u8 diff = maxVFrame - minVFrame + 1;
+    // Keep the existing full 0-255 VFrame range safe from u8 overflow.
+    int diff = int(maxVFrame) - int(minVFrame) + 1;
     if (diff < threads)
     {
         threads = diff;

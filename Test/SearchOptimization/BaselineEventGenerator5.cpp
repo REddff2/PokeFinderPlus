@@ -1,5 +1,5 @@
 /*
- * This file is part of PokéFinder
+ * This file is part of PokÃƒÂ©Finder
  * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
  *
  * This program is free software; you can redistribute it and/or
@@ -17,7 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#include "EventGenerator5.hpp"
+#include "BaselineEventGenerator5.hpp"
 #include <Core/Enum/Method.hpp>
 #include <Core/Gen5/States/EventState5.hpp>
 #include <Core/Parents/PersonalInfo.hpp>
@@ -26,37 +26,17 @@
 #include <Core/Util/Utilities.hpp>
 #include <Core/Util/SearchMetrics.hpp>
 
-EventGenerator5::EventGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, const PGF &pgf, const Profile5 &profile,
-                                 const StateFilter &filter, bool optimizedPruning) :
-    Generator(initialAdvances, maxAdvances, offset, Method::None, profile, filter), pgf(pgf), optimizedPruning(optimizedPruning)
+BaselineEventGenerator5::BaselineEventGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, const PGF &pgf, const Profile5 &profile,
+                                 const StateFilter &filter) :
+    Generator(initialAdvances, maxAdvances, offset, Method::None, profile, filter), pgf(pgf)
 {
-    if (this->optimizedPruning)
-    {
-        std::array<u8, 6> minimum {};
-        std::array<u8, 6> maximum;
-        maximum.fill(31);
-        bool constrained = !filter.compareIV(minimum) || !filter.compareIV(maximum);
-        for (u8 power = 0; power < 16 && !constrained; power++)
-        {
-            constrained = !filter.compareHiddenPower(power);
-        }
-        // Avoid redundant early checks when all IVs/Hidden Powers are accepted,
-        // including the existing Disable Filters setting.
-        this->optimizedPruning = constrained;
-    }
     if (!pgf.getEgg())
     {
         tsv = pgf.getTID() ^ pgf.getSID();
     }
 }
 
-std::vector<EventState5> EventGenerator5::generate(u64 seed) const
-{
-    return optimizedPruning ? generateImpl<true>(seed) : generateImpl<false>(seed);
-}
-
-template <bool prune>
-std::vector<EventState5> EventGenerator5::generateImpl(u64 seed) const
+std::vector<EventState5> BaselineEventGenerator5::generate(u64 seed) const
 {
     const PersonalInfo *info = PersonalLoader::getPersonal(profile.getVersion(), pgf.getSpecies());
 
@@ -84,39 +64,6 @@ std::vector<EventState5> EventGenerator5::generateImpl(u64 seed) const
             else
             {
                 ivs[i] = iv;
-            }
-        }
-
-        if constexpr (prune)
-        {
-            bool reject = !filter.compareIV(ivs);
-            if (reject)
-            {
-                POKEFINDER_SEARCH_COUNT(earlyIVRejected);
-            }
-            else
-            {
-                // Hidden Power uses HP/Atk/Def/Spe/SpA/SpD bit order, just as
-                // State::updateStats. IVs are final here, including fixed PGF IVs.
-                constexpr u8 order[6] = { 0, 1, 2, 5, 3, 4 };
-                u8 bits = 0;
-                for (u8 i = 0; i < 6; i++)
-                {
-                    bits |= (ivs[order[i]] & 1) << i;
-                }
-                reject = !filter.compareHiddenPower(bits * 15 / 63);
-                if (reject)
-                {
-                    POKEFINDER_SEARCH_COUNT(earlyHiddenPowerRejected);
-                }
-            }
-            if (reject)
-            {
-                // The baseline advances the OUTER RNG once in the EventState5
-                // constructor arguments below. Preserve it on rejected frames.
-                // All omitted PID/nature calls affect only the local 'go' copy.
-                rng.nextUInt();
-                continue;
             }
         }
 

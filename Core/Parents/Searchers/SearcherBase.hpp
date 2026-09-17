@@ -42,7 +42,7 @@ public:
      * @param profile Profile Information
      * @param filter State filter
      */
-    SearcherBase() : index(0), progress(0), cancelled(false)
+    SearcherBase() : index(0), progress(0), maxProgress(1), activeThreads(0), cancelled(false)
     {
     }
 
@@ -116,6 +116,12 @@ public:
     void setMaxProgress(u64 max)
     {
         maxProgress = max;
+    }
+
+    // Read after startSearch returns; the worker container is then stable.
+    size_t getWorkerCount() const
+    {
+        return threadContainer.size();
     }
 
 protected:

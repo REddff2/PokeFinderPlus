@@ -1,5 +1,5 @@
 /*
- * This file is part of PokéFinder
+ * This file is part of PokÃƒÂ©Finder
  * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,10 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef EVENTGENERATOR5_HPP
-#define EVENTGENERATOR5_HPP
+#ifndef BASELINEEVENTGENERATOR5_HPP
+#define BASELINEEVENTGENERATOR5_HPP
 
 #include <Core/Gen5/PGF.hpp>
-#include <Core/Util/SearchOptimization.hpp>
 #include <Core/Gen5/Profile5.hpp>
 #include <Core/Parents/Filters/StateFilter.hpp>
 #include <Core/Parents/Generators/Generator.hpp>
@@ -31,11 +30,11 @@ class EventState5;
 /**
  * @brief Event generator for Gen 5
  */
-class EventGenerator5 : public Generator<Profile5, StateFilter>
+class BaselineEventGenerator5 : public Generator<Profile5, StateFilter>
 {
 public:
     /**
-     * @brief Construct a new EventGenerator5 object
+     * @brief Construct a new BaselineEventGenerator5 object
      *
      * @param initialAdvances Initial number of advances
      * @param maxAdvances Maximum number of advances
@@ -44,8 +43,7 @@ public:
      * @param profile Profile Information
      * @param filter State filter
      */
-    EventGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, const PGF &pgf, const Profile5 &profile, const StateFilter &filter,
-                    bool optimizedPruning = SearchOptimization::pruningEnabled());
+    BaselineEventGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, const PGF &pgf, const Profile5 &profile, const StateFilter &filter);
 
     /**
      * @brief Generates states
@@ -57,11 +55,7 @@ public:
     std::vector<EventState5> generate(u64 seed) const;
 
 private:
-    template <bool prune>
-    std::vector<EventState5> generateImpl(u64 seed) const;
-
     PGF pgf;
-    bool optimizedPruning;
 };
 
-#endif // EVENTGENERATOR5_HPP
+#endif // BASELINEEVENTGENERATOR5_HPP

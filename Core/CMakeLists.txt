@@ -315,6 +315,9 @@ add_library(PokeFinderCore STATIC
     RNG/Xoroshiro.hpp
     RNG/Xorshift.cpp
     RNG/Xorshift.hpp
+    Util/SearchOptimization.cpp
+    Util/SearchOptimization.hpp
+    Util/SearchMetrics.hpp
     Util/DateTime.cpp
     Util/DateTime.hpp
     Util/AdvanceSearcher.cpp

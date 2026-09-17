@@ -1,5 +1,6 @@
+// Frozen milestone 2 behavior; do not update with production optimizations.
 /*
- * This file is part of PokéFinder
+ * This file is part of PokÃ©Finder
  * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
  *
  * This program is free software; you can redistribute it and/or
@@ -17,20 +18,16 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#include "WildGenerator5.hpp"
+#include "Milestone2WildGenerator5.hpp"
 #include <Core/Enum/Encounter.hpp>
-#include <Core/Enum/DSType.hpp>
 #include <Core/Enum/Game.hpp>
-#include <Core/Enum/Language.hpp>
 #include <Core/Enum/Lead.hpp>
-#include <Core/Enum/Method.hpp>
 #include <Core/Enum/PassPower.hpp>
 #include <Core/Enum/Shiny.hpp>
 #include <Core/Gen5/StepEncounter.hpp>
 #include <Core/Gen5/States/WildState5.hpp>
 #include <Core/RNG/LCRNG64.hpp>
 #include <Core/RNG/MT.hpp>
-#include <Core/RNG/MTFast.hpp>
 #include <Core/RNG/RNGList.hpp>
 #include <Core/Util/EncounterSlot.hpp>
 #include <Core/Util/Utilities.hpp>
@@ -40,7 +37,7 @@
 #include <iterator>
 #include <unordered_map>
 
-struct WildTargetKey
+struct Milestone2WildTargetKey
 {
     std::array<u8, 6> ivs;
     u32 advances;
@@ -56,12 +53,12 @@ struct WildTargetKey
     u8 encounterSlot;
     u8 form;
 
-    bool operator==(const WildTargetKey &other) const = default;
+    bool operator==(const Milestone2WildTargetKey &other) const = default;
 };
 
-struct WildTargetKeyHash
+struct Milestone2WildTargetKeyHash
 {
-    size_t operator()(const WildTargetKey &key) const
+    size_t operator()(const Milestone2WildTargetKey &key) const
     {
         size_t hash = 0;
         auto combine = [&hash](auto value) {
@@ -89,7 +86,7 @@ struct WildTargetKeyHash
     }
 };
 
-static WildTargetKey getTargetKey(const WildState5 &state, u32 advances)
+static Milestone2WildTargetKey getTargetKey(const WildState5 &state, u32 advances)
 {
     return { { state.getIV(0), state.getIV(1), state.getIV(2), state.getIV(3), state.getIV(4), state.getIV(5) },
              advances,
@@ -199,13 +196,13 @@ static bool isStepModifier(Lead lead)
 
 static u8 getLuckyPower(u8 passPower)
 {
-    u8 luckyPower = PassPower5::getLuckyPower(passPower);
-    return luckyPower <= PassPower5::Lucky3 ? luckyPower : PassPower5::None;
+    u8 luckyPower = Milestone2PassPower5::getLuckyPower(passPower);
+    return luckyPower <= Milestone2PassPower5::Lucky3 ? luckyPower : Milestone2PassPower5::None;
 }
 
 static u16 getEncounterPowerModifier(u8 passPower)
 {
-    switch (PassPower5::getEncounterPower(passPower))
+    switch (Milestone2PassPower5::getEncounterPower(passPower))
     {
     case 1:
         return 150;
@@ -378,88 +375,35 @@ static bool usesNsPokemonReleasedOffset(Encounter encounter)
     return encounter == Encounter::Grass || encounter == Encounter::GrassDark || encounter == Encounter::Surfing;
 }
 
-WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, Lead lead, u8 passPower,
+Milestone2WildGenerator5::Milestone2WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, Lead lead, u8 passPower,
                                bool searchMovingTrigger, bool requireMovingTrigger,
                                const EncounterArea5 &area, const Profile5 &profile, const WildStateFilter &filter) :
-    WildGenerator5(initialAdvances, maxAdvances, offset, method, lead, std::vector<u8> { passPower }, searchMovingTrigger, requireMovingTrigger,
+    Milestone2WildGenerator5(initialAdvances, maxAdvances, offset, method, lead, std::vector<u8> { passPower }, searchMovingTrigger, requireMovingTrigger,
                    area, profile, filter)
 {
 }
 
-WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, Lead lead, const std::vector<u8> &passPowers,
+Milestone2WildGenerator5::Milestone2WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, Lead lead, const std::vector<u8> &passPowers,
                                bool searchMovingTrigger, bool requireMovingTrigger, const EncounterArea5 &area, const Profile5 &profile,
                                const WildStateFilter &filter, bool requirePassPowerIVAdvance) :
-    WildGenerator5(initialAdvances, maxAdvances, offset, method, std::vector<Lead> { lead }, passPowers, searchMovingTrigger, requireMovingTrigger,
+    Milestone2WildGenerator5(initialAdvances, maxAdvances, offset, method, std::vector<Lead> { lead }, passPowers, searchMovingTrigger, requireMovingTrigger,
                    area, profile, filter, requirePassPowerIVAdvance, false)
 {
 }
 
-WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, const std::vector<Lead> &leads, u8 luckyPower,
+Milestone2WildGenerator5::Milestone2WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, const std::vector<Lead> &leads, u8 luckyPower,
                                const EncounterArea5 &area, const Profile5 &profile, const WildStateFilter &filter) :
-    WildGenerator5(initialAdvances, maxAdvances, offset, method, leads, std::vector<u8> { luckyPower }, false, false, area, profile, filter)
+    Milestone2WildGenerator5(initialAdvances, maxAdvances, offset, method, leads, std::vector<u8> { luckyPower }, false, false, area, profile, filter)
 {
 }
 
-// Proven payload scope plus IV subsets, checked once per request rather than once per seed.
-// Do not widen this predicate without a new RNG proof and equivalence coverage.
-static bool matchesPayloadWorkload(const Profile5 &profile, const EncounterArea5 &area, const WildStateFilter &filter,
-                                   const EncounterSettings5 &settings)
-{
-    if (profile.getVersion() != Game::White || profile.getTID() != 69 || profile.getSID() != 58008
-        || profile.getMac() != 0x1656a634e5ULL || profile.getTimer0Min() != 0xc7f || profile.getTimer0Max() != 0xc7f
-        || profile.getVCount() != 0x60 || profile.getVFrame() != 8 || profile.getGxStat() != 6
-        || profile.getDSType() != DSType::DS || profile.getLanguage() != Language::English || profile.getSkipLR()
-        || profile.getMemoryLink() || profile.getShinyCharm() || profile.getNsPokemonReleased()
-        || !std::ranges::all_of(profile.getKeypresses(), [](bool enabled) { return enabled; })
-        || settings.swarm || settings.season != 0 || area.getEncounter() != Encounter::Grass || area.getLocation() != 8)
-    {
-        return false;
-    }
-
-    static const WildStateFilter requiredFilter = [] {
-        std::array<u8, 6> low, high;
-        low.fill(0); high.fill(31);
-        std::array<bool, 25> natures;
-        std::array<bool, 16> powers;
-        std::array<bool, 13> slots {};
-        natures.fill(true); powers.fill(true);
-        slots[5] = slots[12] = true; // Native UI pads the absent swarm slot.
-        return WildStateFilter(255, 255, 3, 20, 20, 0, 255, 0, 255, false, low, high, natures, powers, slots);
-    }();
-    // Any legal IV interval is safe: bounds do not affect the independent payload
-    // RNG. All non-IV criteria must still match this proven request exactly.
-    if (!filter.isIVSubsetOf(requiredFilter)) return false;
-
-    // Match the actual spring table, including all slot metadata and personal-info
-    // identities. A location number alone does not prove an unmodified encounter.
-    const auto areas = Encounters5::getEncounters(Encounter::Grass, { false, 0 }, &profile);
-    const auto expected = std::ranges::find_if(areas, [](const auto &entry) { return entry.getLocation() == 8; });
-    if (expected == areas.end() || area.getRate() != expected->getRate() || area.getSeason() != expected->getSeason()) return false;
-    for (u8 i = 0; i < 13; ++i)
-    {
-        const auto &slot = area.getPokemon(i);
-        const auto &reference = expected->getPokemon(i);
-        if (slot.getSpecie() != reference.getSpecie() || slot.getForm() != reference.getForm()
-            || slot.getMinLevel() != reference.getMinLevel() || slot.getMaxLevel() != reference.getMaxLevel()
-            || slot.getInfo() != reference.getInfo()) return false;
-    }
-    return area.getPokemon(5).getSpecie() == 561 && area.getPokemon(5).getMinLevel() == 20
-        && area.getPokemon(5).getMaxLevel() == 20 && area.getPokemon(12).getSpecie() == 0;
-}
-
-WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, const std::vector<Lead> &leads,
+Milestone2WildGenerator5::Milestone2WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, const std::vector<Lead> &leads,
                                const std::vector<u8> &passPowers, bool searchMovingTrigger, bool requireMovingTrigger,
                                const EncounterArea5 &area, const Profile5 &profile, const WildStateFilter &filter,
-                               bool requirePassPowerIVAdvance, bool filterNonRequiredLeads, bool optimizedPruning,
-                               const EncounterSettings5 &encounterSettings) :
+                               bool requirePassPowerIVAdvance, bool filterNonRequiredLeads, bool optimizedPruning) :
     WildGenerator(initialAdvances, maxAdvances, offset, method, leads.empty() ? Lead::None : leads.front(), area, profile, filter),
     optimizedPruning(optimizedPruning),
-    payloadFirst(optimizedPruning && method == Method::Method5 && initialAdvances == 0 && maxAdvances == 0 && offset == 0
-                 && !searchMovingTrigger && !requireMovingTrigger && filterNonRequiredLeads
-                 && leads.size() == 1 && leads.front() == Lead::None
-                 && passPowers.size() == 1 && passPowers.front() == PassPower5::None
-                 && matchesPayloadWorkload(profile, area, filter, encounterSettings)),
-    pruneIVs(false), pruneHiddenPower(false), pruneSlots(false), prunePID(false), pruneLevel(false),
+    pruneIVs(false), pruneHiddenPower(false), pruneSlots(false), prunePID(false),
     passPowers(passPowers),
     leads(leads.empty() ? std::vector<Lead> { Lead::None } : leads),
     searchMovingTrigger(searchMovingTrigger),
@@ -472,7 +416,6 @@ WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset,
         std::array<u8, 6> low {}, high;
         high.fill(31);
         pruneIVs = !filter.compareIV(low) || !filter.compareIV(high);
-        pruneLevel = !filter.compareLevel(1) || !filter.compareLevel(100);
         for (u8 i = 0; i < 16; ++i) pruneHiddenPower |= !filter.compareHiddenPower(i);
         for (u8 i = 0; i < 13; ++i) pruneSlots |= !filter.compareEncounterSlot(i);
         for (u8 i = 0; i < 25; ++i) prunePID |= !filter.compareNature(i);
@@ -484,7 +427,7 @@ WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset,
     {
         for (u8 &passPower : this->passPowers)
         {
-            passPower = PassPower5::combine(PassPower5::None, PassPower5::getEncounterPower(passPower));
+            passPower = Milestone2PassPower5::combine(Milestone2PassPower5::None, Milestone2PassPower5::getEncounterPower(passPower));
         }
     }
 
@@ -498,7 +441,7 @@ WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset,
 
     if (this->passPowers.empty())
     {
-        this->passPowers.emplace_back(PassPower5::None);
+        this->passPowers.emplace_back(Milestone2PassPower5::None);
     }
     std::ranges::sort(this->passPowers);
     this->passPowers.erase(std::ranges::unique(this->passPowers).begin(), this->passPowers.end());
@@ -507,83 +450,23 @@ WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset,
     this->leads.erase(std::ranges::unique(this->leads).begin(), this->leads.end());
 }
 
-bool WildGenerator5::reducedIVsEnabled(u32 initialIVAdvances, u32 maxIVAdvances) const
+std::vector<WildState5> Milestone2WildGenerator5::generate(u64 seed, u32 initialAdvances, u32 maxAdvances) const
 {
-    const auto version = profile.getVersion();
-    return optimizedPruning && method == Method::Method5 && initialIVAdvances == 0 && maxIVAdvances == 0
-        && (version == Game::Black || version == Game::White || version == Game::Black2 || version == Game::White2);
-}
-
-bool WildGenerator5::payloadFirstEnabled(u32 initialIVAdvances, u32 maxIVAdvances) const
-{
-    return payloadFirst && initialIVAdvances == 0 && maxIVAdvances == 0;
-}
-
-bool WildGenerator5::matchesPayload(u64 seed) const
-{
-    // Only the exact guarded White/Grass request can call this predicate.
-    // These draws use a fresh local BWRNG; neither MT nor the next seed observes it.
-    BWRNG go(seed, Utilities5::initialAdvancesBW(seed));
-    go.nextUInt(0xffff); // Required None-lead draw, even though its flag is unused.
-    const u8 slot = EncounterSlot::bwSlot(go.nextUInt(0xffff) / 656, Encounter::Grass, PassPower::None);
-    if (slot != 5) return false;
-    const u8 level = area.calculateLevel(slot, go.nextUInt(0xffff) / 656, false); // Draw even for fixed level 20.
-    if (level != 20) return false;
-    const u32 pid = Utilities5::createPID(tsv, 2, 255, Shiny::Random, true, area.getPokemon(slot).getInfo()->getGender(), go);
-    return Utilities::isShiny<true>(pid, tsv); // Final PID, including the existing transformations.
-}
-
-std::vector<WildState5> WildGenerator5::generate(u64 seed, u32 initialAdvances, u32 maxAdvances) const
-{
-    POKEFINDER_SEARCH_COUNT(wildSeedCandidates);
-    if (payloadFirstEnabled(initialAdvances, maxAdvances) && !matchesPayload(seed))
-    {
-        POKEFINDER_SEARCH_COUNT(wildPreMTRejected);
-        return {};
-    }
     bool bw = (profile.getVersion() & Game::BW) != Game::None;
 
     std::vector<std::pair<u32, std::array<u8, 6>>> ivs;
 
-    POKEFINDER_SEARCH_COUNT(wildMTInitializations);
-    if (reducedIVsEnabled(initialAdvances, maxAdvances))
+    RNGList<u8, MT, 8, gen> rngList(seed >> 32, initialAdvances + (bw ? 0 : 2));
+    for (u32 cnt = 0; cnt <= maxAdvances; cnt++, rngList.advanceState())
     {
-        POKEFINDER_SEARCH_COUNT(wildReducedMTInitializations);
         POKEFINDER_SEARCH_COUNT(wildIVCandidates);
         std::array<u8, 6> iv;
-        if (bw)
-        {
-            MTFast<6, true> rng(seed >> 32);
-            std::ranges::generate(iv, [&rng] { return rng.next(); });
-        }
-        else
-        {
-            MTFast<8, true> rng(seed >> 32, 2);
-            std::ranges::generate(iv, [&rng] { return rng.next(); });
-        }
-        // Preserve the Super Rod collection exception and the existing filters.
+        std::ranges::generate(iv, [&rngList] { return rngList.next(); });
         if (area.getEncounter() == Encounter::SuperRod || filter.compareIV(iv))
         {
-            POKEFINDER_SEARCH_COUNT(wildIVSurvivors);
-            ivs.emplace_back(0, iv);
+            ivs.emplace_back(initialAdvances + cnt, iv);
         }
         else { POKEFINDER_SEARCH_COUNT(wildExistingIVRejected); }
-    }
-    else
-    {
-        RNGList<u8, MT, 8, gen> rngList(seed >> 32, initialAdvances + (bw ? 0 : 2));
-        for (u32 cnt = 0; cnt <= maxAdvances; cnt++, rngList.advanceState())
-        {
-            POKEFINDER_SEARCH_COUNT(wildIVCandidates);
-            std::array<u8, 6> iv;
-            std::ranges::generate(iv, [&rngList] { return rngList.next(); });
-            if (area.getEncounter() == Encounter::SuperRod || filter.compareIV(iv))
-            {
-                POKEFINDER_SEARCH_COUNT(wildIVSurvivors);
-                ivs.emplace_back(initialAdvances + cnt, iv);
-            }
-            else { POKEFINDER_SEARCH_COUNT(wildExistingIVRejected); }
-        }
     }
 
     if (ivs.empty())
@@ -596,12 +479,12 @@ std::vector<WildState5> WildGenerator5::generate(u64 seed, u32 initialAdvances, 
     }
 }
 
-std::vector<WildState5> WildGenerator5::generate(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs) const
+std::vector<WildState5> Milestone2WildGenerator5::generate(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs) const
 {
     return generateFiltered(seed, ivs, false);
 }
 
-std::vector<WildState5> WildGenerator5::generateFiltered(u64 seed,
+std::vector<WildState5> Milestone2WildGenerator5::generateFiltered(u64 seed,
     const std::vector<std::pair<u32, std::array<u8, 6>>> &inputIVs, bool ivsAlreadyFiltered) const
 {
     std::vector<std::pair<u32, std::array<u8, 6>>> filteredIVs;
@@ -635,30 +518,16 @@ std::vector<WildState5> WildGenerator5::generateFiltered(u64 seed,
     }
     const auto &ivs = *acceptedIVs;
     if (ivs.empty()) return {};
-    // Within one lead/power, each PID frame has a distinct advance. Strictly
-    // increasing IV advances make every (PID advance, IV advance) pair unique,
-    // which is required by matches(). Supplied duplicate/unsorted IV lists and
-    // multiple leads/powers keep the existing first-match merge below.
-    const bool uniqueFrames = optimizedPruning && leads.size() == 1 && passPowers.size() == 1
-        && std::ranges::adjacent_find(ivs, [](const auto &a, const auto &b) { return a.first >= b.first; }) == ivs.end();
-    auto rejectPublicState = [&](const WildState5 &state) {
-        if (requireMovingTrigger && !state.isValid()) return true;
-        if (filterNonRequiredLeads && state.getLead() != Lead::None && !state.getLeadRequired()) return true;
-        // Invalid bites need the public filter even though the private generator
-        // retains them. Phenomenon items bypass Pokemon filters as before.
-        return !state.getPhenomenonItem() && (!optimizedPruning || !state.isValid())
-            && !filter.compareState(static_cast<const WildState &>(state));
-    };
     std::unordered_multimap<u64, size_t> stateIndex;
     std::vector<WildState5> states;
     for (u8 activePassPower : passPowers)
     {
         std::vector<std::pair<u32, std::array<u8, 6>>> powerCopy;
         const auto *powerIVs = &ivs;
-        if (!optimizedPruning || (requirePassPowerIVAdvance && activePassPower != PassPower5::None))
+        if (!optimizedPruning || (requirePassPowerIVAdvance && activePassPower != Milestone2PassPower5::None))
         {
             powerCopy = ivs;
-            if (requirePassPowerIVAdvance && activePassPower != PassPower5::None)
+            if (requirePassPowerIVAdvance && activePassPower != Milestone2PassPower5::None)
                 std::erase_if(powerCopy, [](const auto &iv) { return iv.first < 2; });
             powerIVs = &powerCopy;
         }
@@ -670,15 +539,26 @@ std::vector<WildState5> WildGenerator5::generateFiltered(u64 seed,
         for (Lead activeLead : leads)
         {
             auto leadStates = generate(seed, *powerIVs, activePassPower, activeLead);
-            if (uniqueFrames)
-            {
-                std::erase_if(leadStates, rejectPublicState);
-                return leadStates;
-            }
             if (!optimizedPruning) states.reserve(states.size() + leadStates.size());
             for (const auto &state : leadStates)
             {
-                if (rejectPublicState(state)) continue;
+                if (requireMovingTrigger && !state.isValid())
+                {
+                    continue;
+                }
+
+                if (filterNonRequiredLeads && state.getLead() != Lead::None && !state.getLeadRequired())
+                {
+                    continue;
+                }
+
+                // Valid Pokemon states already passed this exact filter below.
+                // Invalid bites still need the public filter; item rows bypass it.
+                if (!state.getPhenomenonItem() && (!optimizedPruning || !state.isValid())
+                    && !filter.compareState(static_cast<const WildState &>(state)))
+                {
+                    continue;
+                }
 
                 addState(states, state, activeLead, optimizedPruning ? &stateIndex : nullptr);
             }
@@ -688,7 +568,7 @@ std::vector<WildState5> WildGenerator5::generateFiltered(u64 seed,
     // With one lead there cannot be a target from another lead to suppress.
     if (optimizedPruning && leads.size() == 1) return states;
 
-    std::unordered_map<WildTargetKey, bool, WildTargetKeyHash> noneTargets;
+    std::unordered_map<Milestone2WildTargetKey, bool, Milestone2WildTargetKeyHash> noneTargets;
     for (const auto &state : states)
     {
         if (state.getLead() == Lead::None)
@@ -699,15 +579,6 @@ std::vector<WildState5> WildGenerator5::generateFiltered(u64 seed,
 
     if (!noneTargets.empty())
     {
-        if (optimizedPruning)
-        {
-            // Stable compaction preserves the first representative and result
-            // order without allocating and copying a second complete vector.
-            std::erase_if(states, [&](const auto &state) {
-                return state.getLead() != Lead::None && noneTargets.contains(getTargetKey(state, state.getAdvances()));
-            });
-            return states;
-        }
         std::vector<WildState5> filtered;
         filtered.reserve(states.size());
         for (const auto &state : states)
@@ -723,7 +594,7 @@ std::vector<WildState5> WildGenerator5::generateFiltered(u64 seed,
     return states;
 }
 
-std::vector<WildState5> WildGenerator5::generate(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs, u8 passPower,
+std::vector<WildState5> Milestone2WildGenerator5::generate(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs, u8 passPower,
                                                  Lead lead) const
 {
     u8 luckyPower = getLuckyPower(passPower);
@@ -939,22 +810,7 @@ std::vector<WildState5> WildGenerator5::generate(u64 seed, const std::vector<std
                 encounterSlot = EncounterSlot::bwSlot(getPercentRand(go, bw), area.getEncounter(), static_cast<PassPower>(luckyPower));
             }
 
-            // Slot is now final (including swarm and Magnet Pull/Static).
-            // Remaining payload calls only affect the local go RNG. Keep the
-            // outer frame advancement exactly once on either rejection path.
-            if (pruneSlots && !filter.compareEncounterSlot(encounterSlot))
-            {
-                POKEFINDER_SEARCH_COUNT(wildEarlyFrameRejected);
-                finishFrame();
-                continue;
-            }
             level = area.calculateLevel(encounterSlot, getPercentRand(go, bw), pressure);
-            if (pruneLevel && !filter.compareLevel(level))
-            {
-                POKEFINDER_SEARCH_COUNT(wildEarlyFrameRejected);
-                finishFrame();
-                continue;
-            }
 
             // RNG calls for left encounter slot and level
             if (doubleBattle)
@@ -967,7 +823,8 @@ std::vector<WildState5> WildGenerator5::generate(u64 seed, const std::vector<std
             || lead == Lead::CompoundEyes || (lead == Lead::SuctionCups && area.getEncounter() == Encounter::SuperRod)
             || (lead == Lead::ArenaTrap && searchMovingTrigger);
 
-        if (optimizedPruning && filterNonRequiredLeads && lead != Lead::None && !leadRequired)
+        if (optimizedPruning && ((filterNonRequiredLeads && lead != Lead::None && !leadRequired)
+            || (!phenomenonItem && pruneSlots && !filter.compareEncounterSlot(encounterSlot))))
         {
             POKEFINDER_SEARCH_COUNT(wildEarlyFrameRejected);
             finishFrame();

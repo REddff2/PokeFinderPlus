@@ -59,6 +59,11 @@ public:
                 const std::array<u8, 6> &ivMin, const std::array<u8, 6> &ivMax, const std::array<bool, 25> &natures,
                 const std::array<bool, 16> &powers);
 
+    bool operator==(const StateFilter &other) const = default;
+
+    const std::array<u8, 6> &getMinIVs() const { return ivMin; }
+    const std::array<u8, 6> &getMaxIVs() const { return ivMax; }
+
     /**
      * @brief Determines if the \p ability meets the filter criteria
      *
@@ -198,6 +203,12 @@ public:
                     const std::array<u8, 6> &ivMin, const std::array<u8, 6> &ivMax, const std::array<bool, 25> &natures,
                     const std::array<bool, 16> &powers, const std::array<bool, 13> &encounterSlots);
 
+    bool operator==(const WildStateFilter &other) const = default;
+
+    /// Same non-IV criteria, with valid IV intervals contained in other's intervals.
+    bool isIVSubsetOf(const WildStateFilter &other) const;
+
+
     /**
      * @brief Determines if the \p encounterSlot meets the filter criteria
      *
@@ -207,6 +218,9 @@ public:
      * @return false Encounter slot does not pass the filter
      */
     bool compareEncounterSlot(u8 encounterSlot) const;
+
+    /// Checks a final encounter level without constructing a Wild state.
+    bool compareLevel(u8 level) const { return skip || (level >= levelMin && level <= levelMax); }
 
     /**
      * @brief Determines if the \p state meets the filter criteria

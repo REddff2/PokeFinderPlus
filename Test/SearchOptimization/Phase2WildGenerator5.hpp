@@ -1,5 +1,5 @@
 /*
- * This file is part of PokéFinder
+ * This file is part of PokÃ©Finder
  * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
  *
  * This program is free software; you can redistribute it and/or
@@ -17,13 +17,12 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef WILDGENERATOR5_HPP
-#define WILDGENERATOR5_HPP
+#ifndef PHASE2_WILDGENERATOR5_HPP
+#define PHASE2_WILDGENERATOR5_HPP
 
 #include <Core/Enum/Lead.hpp>
 #include <Core/Util/SearchOptimization.hpp>
 #include <Core/Gen5/EncounterArea5.hpp>
-#include <Core/Gen5/Encounters5.hpp>
 #include <Core/Gen5/Profile5.hpp>
 #include <Core/Parents/Filters/StateFilter.hpp>
 #include <Core/Parents/Generators/WildGenerator.hpp>
@@ -31,39 +30,13 @@
 
 class WildState5;
 
-namespace PassPower5
-{
-    constexpr u8 None = 0;
-    constexpr u8 Lucky1 = 1;
-    constexpr u8 Lucky2 = 2;
-    constexpr u8 Lucky3 = 3;
+#include <Core/Gen5/Generators/WildGenerator5.hpp>
 
-    constexpr u8 EncounterShift = 4;
-    constexpr u8 Encounter1 = 1 << EncounterShift;
-    constexpr u8 Encounter2 = 2 << EncounterShift;
-    constexpr u8 Encounter3 = 3 << EncounterShift;
-
-    constexpr u8 getLuckyPower(u8 passPower)
-    {
-        return passPower & 0xf;
-    }
-
-    constexpr u8 getEncounterPower(u8 passPower)
-    {
-        return passPower >> EncounterShift;
-    }
-
-    constexpr u8 combine(u8 luckyPower, u8 encounterPower)
-    {
-        return luckyPower | (encounterPower << EncounterShift);
-    }
-}
-
-class WildGenerator5 : public WildGenerator<EncounterArea5, Profile5, WildStateFilter>
+class Phase2WildGenerator5 : public WildGenerator<EncounterArea5, Profile5, WildStateFilter>
 {
 public:
     /**
-     * @brief Construct a new WildGenerator5 object
+     * @brief Construct a new Phase2WildGenerator5 object
      *
      * @param initialAdvances Initial number of advances
      * @param maxAdvances Maximum number of advances
@@ -77,15 +50,15 @@ public:
      * @param profile Profile Information
      * @param filter State filter
      */
-    WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, Lead lead, u8 passPower, bool searchMovingTrigger,
+    Phase2WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, Lead lead, u8 passPower, bool searchMovingTrigger,
                    bool requireMovingTrigger, const EncounterArea5 &area, const Profile5 &profile, const WildStateFilter &filter);
 
-    WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, Lead lead, const std::vector<u8> &passPowers,
+    Phase2WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, Lead lead, const std::vector<u8> &passPowers,
                    bool searchMovingTrigger, bool requireMovingTrigger, const EncounterArea5 &area, const Profile5 &profile,
                    const WildStateFilter &filter, bool requirePassPowerIVAdvance = false);
 
     /**
-     * @brief Construct a new WildGenerator5 object
+     * @brief Construct a new Phase2WildGenerator5 object
      *
      * @param initialAdvances Initial number of advances
      * @param maxAdvances Maximum number of advances
@@ -97,14 +70,13 @@ public:
      * @param profile Profile Information
      * @param filter State filter
      */
-    WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, const std::vector<Lead> &leads, u8 luckyPower,
+    Phase2WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, const std::vector<Lead> &leads, u8 luckyPower,
                    const EncounterArea5 &area, const Profile5 &profile, const WildStateFilter &filter);
 
-    WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, const std::vector<Lead> &leads,
+    Phase2WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, const std::vector<Lead> &leads,
                    const std::vector<u8> &passPowers, bool searchMovingTrigger, bool requireMovingTrigger, const EncounterArea5 &area,
                    const Profile5 &profile, const WildStateFilter &filter, bool requirePassPowerIVAdvance = false,
-                   bool filterNonRequiredLeads = true, bool optimizedPruning = SearchOptimization::pruningEnabled(),
-                   const EncounterSettings5 &encounterSettings = { true, 255 });
+                   bool filterNonRequiredLeads = true, bool optimizedPruning = SearchOptimization::pruningEnabled());
 
     /**
      * @brief Generates states for the \p encounterArea
@@ -130,16 +102,8 @@ public:
     // Snapshot used by the Wild-only result accumulation policy.
     bool optimizedPruningEnabled() const { return optimizedPruning; }
 
-    // Read-only policy snapshots. Unknown encounter settings disable payload-first.
-    bool reducedIVsEnabled(u32 initialIVAdvances, u32 maxIVAdvances) const;
-    bool payloadFirstEnabled(u32 initialIVAdvances, u32 maxIVAdvances) const;
-    const std::array<u8, 6> &getMinIVs() const { return filter.getMinIVs(); }
-    const std::array<u8, 6> &getMaxIVs() const { return filter.getMaxIVs(); }
-
 private:
     bool optimizedPruning;
-    bool payloadFirst;
-    bool matchesPayload(u64 seed) const;
     bool pruneIVs;
     bool pruneHiddenPower;
     bool pruneSlots;
@@ -157,4 +121,4 @@ private:
     std::vector<WildState5> generate(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs, u8 passPower, Lead lead) const;
 };
 
-#endif // WILDGENERATOR5_HPP
+#endif // PHASE2_WILDGENERATOR5_HPP

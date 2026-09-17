@@ -143,6 +143,20 @@
    <item row="4" column="1">
     <widget class="QComboBox" name="comboBoxThreads"/>
    </item>
+   <item row="5" column="0" colspan="3">
+    <widget class="QGroupBox" name="groupBoxSearchOptimization">
+     <property name="title"><string>Gen 5 Smart Search</string></property>
+     <layout class="QVBoxLayout" name="verticalLayoutSearchOptimization">
+      <item><widget class="QCheckBox" name="checkBoxSearchPruning">
+       <property name="text"><string>Enable Gen 5 smart search optimizations</string></property>
+       <property name="toolTip"><string>Uses verified Gen 5 search optimizations where supported. Unsupported searches use normal PokeFinder behavior.</string></property>
+      </widget></item>
+      <item><widget class="QLabel" name="labelSearchOptimizationScope">
+       <property name="text"><string>Changes apply to new searches and generation.</string></property>
+      </widget></item>
+     </layout>
+    </widget>
+   </item>
   </layout>
  </widget>
  <resources/>

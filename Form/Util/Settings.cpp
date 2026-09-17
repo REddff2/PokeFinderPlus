@@ -27,6 +27,7 @@
 #include <QProcess>
 #include <QSettings>
 #include <QThread>
+#include <Core/Util/SearchOptimization.hpp>
 
 Settings::Settings(QWidget *parent) : QWidget(parent), ui(new Ui::Settings)
 {
@@ -91,7 +92,17 @@ Settings::Settings(QWidget *parent) : QWidget(parent), ui(new Ui::Settings)
         }
     }
 
+    // Keep the normal Threads preference independent of Smart Search.
+    setting.remove("plusSearchWorkerLimit");
+    const bool smart = setting.value("plusSearchPruning", SearchOptimization::DefaultPruning).toBool();
+    ui->checkBoxSearchPruning->setChecked(smart);
+    SearchOptimization::setPruningEnabled(smart);
     setting.endGroup();
+
+    connect(ui->checkBoxSearchPruning, &QCheckBox::toggled, this, [](bool enabled) {
+        QSettings().setValue("settings/plusSearchPruning", enabled);
+        SearchOptimization::setPruningEnabled(enabled);
+    });
 
     connect(ui->comboBoxLanguage, &QComboBox::currentIndexChanged, this, &Settings::languageIndexChanged);
     connect(ui->pushButtonProfile, &QPushButton::clicked, this, &Settings::changeProfiles);

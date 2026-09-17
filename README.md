@@ -36,13 +36,15 @@ Plugins are optional DLL files placed in `PokeFinder+\plugins\`.
 
 No plugins are included with the base PokeFinder+ download.
 
+## Smart Search
+
+Optional Gen 5 Smart Search improves supported Event and Wild searches. Enable it in Tools > Settings. It is OFF by default; the normal Threads setting is unchanged.
+
 ## Source
 
 This repository contains the PokeFinder+ source code.
 
 PokeFinder+ is based on [NickPlayeZ/PokeFinder](https://github.com/NickPlayeZ/PokeFinder), which is based on [Admiral-Fish/PokeFinder](https://github.com/Admiral-Fish/PokeFinder). See [LICENSE](LICENSE) and the [upstream README](docs/UPSTREAM_README.md).
-
-v1 is a [reconstructed pre-Search-Optimization build](RECONSTRUCTED-V1.md).
 
 ## Build on Windows
 
@@ -57,3 +59,5 @@ cmake --build build --target PokeFinder PokeFinderPlusLauncher
 ```
 
 For tests, configure with `-DTEST=ON`, build `PokeFinderTest`, and run `ctest --test-dir build --output-on-failure`.
+
+For Gen 5 Smart Search verification, also configure with `-DSEARCH_OPTIMIZATION_TESTS=ON` and build all targets. The optional `SMART_SEARCH_IV_CACHE` and `SMART_SEARCH_SHA_CACHE` CMake paths enable the cache fixture tests.

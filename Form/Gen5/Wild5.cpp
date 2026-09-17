@@ -736,7 +736,9 @@ void Wild5::search()
 
     auto filter = ui->filterSearcher->getFilter<WildStateFilter, true>();
     WildGenerator5 generator(initialAdvances, maxAdvances, 0, Method::Method5, leads, passPowers, searchMovingTrigger, searchMovingTrigger,
-                             encounterSearcher[ui->comboBoxSearcherLocation->currentIndex()], *currentProfile, filter, true);
+                             encounterSearcher[ui->comboBoxSearcherLocation->currentIndex()], *currentProfile, filter, true, true,
+                             SearchOptimization::pruningEnabled(),
+                             { ui->checkBoxSearcherSwarm->isChecked(), static_cast<u8>(ui->comboBoxSearcherSeason->currentIndex()) });
 
     SearcherBase5<WildGenerator5, WildState5> *searcher;
     if (fastSearchEnabled())

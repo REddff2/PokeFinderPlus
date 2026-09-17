@@ -18,6 +18,7 @@
  */
 
 #include "StateFilter.hpp"
+#include <Core/Util/SearchMetrics.hpp>
 #include <algorithm>
 #include <Core/Parents/States/WildState.hpp>
 #include <Core/Gen8/States/State8.hpp>
@@ -61,6 +62,7 @@ bool StateFilter::compareHiddenPower(u8 hiddenPower) const
 
 bool StateFilter::compareIV(const std::array<u8, 6> &ivs) const
 {
+    POKEFINDER_SEARCH_COUNT(ivChecks);
     if (skip)
     {
         return true;
@@ -150,6 +152,7 @@ bool StateFilter::compareState(const State &state) const
         return false;
     }
 
+    POKEFINDER_SEARCH_COUNT(ivChecks);
     for (int i = 0; i < 6; i++)
     {
         u8 iv = state.getIV(i);
@@ -335,4 +338,16 @@ bool WildStateFilter::hasFilters() const
     }
 
     return false;
+}
+
+bool WildStateFilter::isIVSubsetOf(const WildStateFilter &other) const
+{
+    for (size_t i = 0; i < ivMin.size(); ++i)
+    {
+        if (ivMin[i] > ivMax[i] || ivMin[i] < other.ivMin[i] || ivMax[i] > other.ivMax[i]) return false;
+    }
+    auto normalized = *this;
+    normalized.ivMin = other.ivMin;
+    normalized.ivMax = other.ivMax;
+    return normalized == other;
 }

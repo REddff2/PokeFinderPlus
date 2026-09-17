@@ -29,6 +29,7 @@
 #include <QStandardPaths>
 #include <QStyleHints>
 #include <QThread>
+#include <Core/Util/SearchOptimization.hpp>
 #include <QTranslator>
 #include <QTextStream>
 #include <filesystem>
@@ -127,6 +128,9 @@ int main(int argc, char *argv[])
     QSettings setting;
     setting.beginGroup("settings");
     validateSettings(setting);
+    setting.remove("plusSearchWorkerLimit");
+    const bool smartSearch = setting.value("plusSearchPruning", SearchOptimization::DefaultPruning).toBool();
+    SearchOptimization::setPruningEnabled(smartSearch);
 
     QString profilePath = setting.value("profiles").toString();
     bool profile = ProfileLoader::init(profilePath.toStdWString());
