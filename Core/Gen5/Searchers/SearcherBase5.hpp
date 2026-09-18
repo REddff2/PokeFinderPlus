@@ -65,6 +65,7 @@ public:
     void startSearch(int threads, const Date &start, const Date &end);
 
 protected:
+    u64 candidatesPerWorker = 0;
     Generator generator;
     Profile5 profile;
     std::vector<Keypress> keypresses;

@@ -21,6 +21,8 @@
 #define SEARCHER5_HPP
 
 #include <Core/Gen5/Searchers/SearcherBase5.hpp>
+#include <Core/Gen5/OptimizationFamily.hpp>
+#include <Core/Gen5/GPU/Session.hpp>
 
 /**
  * @brief Parent searcher class for most Gen 5 generators
@@ -32,15 +34,21 @@ template <class Generator, class State>
 class Searcher5 : public SearcherBase5<Generator, State>
 {
 public:
+    bool optimizedResultsEnabled() const { return smartResults; }
     /**
      * @brief Construct a new Searcher5 object
      *
      * @param generator State generator
      * @param profile Profile information
      */
-    Searcher5(const Generator &generator, const Profile5 &profile);
+    Searcher5(const Generator &generator, const Profile5 &profile, std::shared_ptr<GpuWild::Session> gpuSession = {});
+    std::shared_ptr<GpuWild::Session> getGpuSession() const { return gpu; }
 
 private:
+    std::shared_ptr<GpuWild::Session> gpu;
+    std::optional<GpuWild::IVPlan> gpuPlan;
+    bool searchGpu(const Date &start, const Date &end);
+    const bool smartResults = SearchOptimization::pruningEnabled(Gen5::optimizationFamily<Generator>);
     /**
      * @brief Searches between the \p start and \p end dates
      *

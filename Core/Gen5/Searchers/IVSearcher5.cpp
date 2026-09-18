@@ -28,12 +28,9 @@
 template <class Generator, class Result>
 static void reserveWildResults(std::vector<Result> &results, size_t count, const Generator &generator)
 {
-    if constexpr (std::is_same_v<Generator, WildGenerator5>)
-    {
-        // Let vector's amortized growth handle Wild batches. Reserving capacity
-        // plus count forced a reallocation and full copy for every seed batch.
-        if (generator.optimizedPruningEnabled()) return;
-    }
+    // Let vector's amortized growth handle search batches. Reserving capacity
+    // plus count forced a reallocation and full copy for every seed batch.
+    if (generator.optimizedPruningEnabled()) return;
     results.reserve(results.capacity() + count);
 }
 
@@ -43,20 +40,20 @@ IVSearcher5<Generator, State>::IVSearcher5(u32 initialAdvances, u32 maxAdvances,
                                              std::shared_ptr<GpuWild::Session> gpuSession) :
     SearcherBase5<Generator, State>(generator, profile), initialAdvances(initialAdvances), maxAdvances(maxAdvances)
 {
-    if constexpr (std::is_same_v<Generator, WildGenerator5>)
+    bool legacy = false;
+    if constexpr (std::is_same_v<Generator, WildGenerator5>) legacy = generator.payloadFirstEnabled(initialAdvances, maxAdvances);
+    if (!legacy) gpuPlan = generator.gpuIVPlan(initialAdvances, maxAdvances);
+    if (SearchOptimization::gpuEnabled(Gen5::optimizationFamily<Generator>) && (legacy || gpuPlan))
     {
-        if (SearchOptimization::gpuEnabled() && generator.payloadFirstEnabled(initialAdvances, maxAdvances))
-        {
-            try { gpu = gpuSession ? std::move(gpuSession) : std::make_shared<GpuWild::Session>(); }
-            catch (const std::exception &) { /* Optional GPU allocation failure: use original CPU loop. */ }
-        }
+        try { gpu = gpuSession ? std::move(gpuSession) : std::make_shared<GpuWild::Session>(); }
+        catch (const std::exception &) { /* Optional GPU allocation failure: use Smart CPU. */ }
     }
 }
 
 template <class Generator, class State>
 void IVSearcher5<Generator, State>::search(const Date &start, const Date &end)
 {
-    if (gpu && searchGpu(start, end)) return;
+    if (gpu && (!gpuPlan || this->candidatesPerWorker >= 8ULL * GpuWild::Session::BatchSize) && searchGpu(start, end)) return;
     SHA1SSE sha(this->profile);
     while (true)
     {
@@ -119,8 +116,6 @@ void IVSearcher5<Generator, State>::search(const Date &start, const Date &end)
 template <class Generator, class State>
 bool IVSearcher5<Generator, State>::searchGpu(const Date &start, const Date &end)
 {
-    if constexpr (!std::is_same_v<Generator, WildGenerator5>) return false;
-    else
     {
         struct Segment { size_t begin; Date day; u32 time; Buttons buttons; u16 timer; };
         std::vector<u64> batch;
@@ -135,7 +130,7 @@ bool IVSearcher5<Generator, State>::searchGpu(const Date &start, const Date &end
 
         auto consume = [&] {
             if (batch.empty() || this->cancelled.load(std::memory_order_relaxed)) return;
-            auto indices = gpu->filter(batch, this->cancelled, { this->generator.getMinIVs(), this->generator.getMaxIVs() });
+            auto indices = gpu->filter(batch, this->cancelled, { this->generator.getMinIVs(), this->generator.getMaxIVs() }, gpuPlan, Gen5::optimizationFamily<Generator>);
             auto finish = [&](u32 index) {
                 auto states = this->generator.generate(batch[index], initialAdvances, maxAdvances);
                 if (states.empty()) return;

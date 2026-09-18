@@ -38,11 +38,15 @@ Plugins are optional DLL files placed in `PokeFinder+\plugins\`.
 
 No plugins are included with the base PokeFinder+ download.
 
-## Smart Search
+## Gen 5 Smart Search
 
-Optional Gen 5 Smart Search improves supported Event and Wild searches. Enable it in Tools > Settings. It is OFF by default; the normal Threads setting is unchanged.
+Enable Gen 5 Smart Search in Tools > Settings for the verified Wild, Static, Event, Eggs, Dream Radar, Hidden Grotto, Pickup, Adjacent Seeds, and Cache Builders optimizations. Smart Search is **OFF by default**, and the normal PokeFinder Threads setting is unchanged.
 
-Optional GPU acceleration is available for supported Gen 5 Wild searches when Smart Search is enabled. It is OFF by default and falls back to CPU Smart Search if unavailable.
+When Smart Search is ON, **Advanced options** appears collapsed. Expand it to enable or disable individual families. Family preferences default to ON internally and survive turning the master off or restarting. Turning the master off hides Advanced options and uses baseline behavior for new searches.
+
+GPU acceleration is a separate, optional switch and is **OFF by default**. It requires Smart Search, the relevant family preference, and a verified supported workload. Supported GPU paths include Wild, Static, Dream Radar, Hidden Grotto Pokemon, Pickup, and IV Cache Builder. Unsupported workloads and GPU failures retain the existing Smart CPU/baseline fallback behavior. Existing cache paths keep their normal priority.
+
+No plugins are included. See the [v1.3.0 release notes and coverage matrix](docs/RELEASE_v1.3.0.md).
 
 ## Source
 

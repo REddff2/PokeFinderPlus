@@ -18,6 +18,9 @@
  */
 
 #include "HiddenGrottoGenerator.hpp"
+#include "IVRNG.hpp"
+#include "SmartFilter.hpp"
+#include <unordered_map>
 #include <Core/Enum/Game.hpp>
 #include <Core/Enum/Lead.hpp>
 #include <Core/Enum/Method.hpp>
@@ -98,19 +101,28 @@ HiddenGrottoSlotGenerator::HiddenGrottoSlotGenerator(u32 initialAdvances, u32 ma
 std::vector<HiddenGrottoState> HiddenGrottoSlotGenerator::generate(u64 seed) const
 {
     std::vector<HiddenGrottoState> states;
+    std::unordered_multimap<u32, size_t> index;
     for (PassPower activeGrottoPower : grottoPowers)
     {
         auto powerStates = generate(seed, activeGrottoPower);
         states.reserve(states.size() + powerStates.size());
         for (const auto &state : powerStates)
         {
-            auto duplicate = std::ranges::find_if(states, [&state](const HiddenGrottoState &other) {
+            auto matches = [&state](const HiddenGrottoState &other) {
                 return state.getAdvances() == other.getAdvances() && state.getGroup() == other.getGroup()
                     && state.getSlot() == other.getSlot() && state.getData() == other.getData()
                     && state.getItem() == other.getItem() && state.getGender() == other.getGender();
-            });
-            if (duplicate == states.end())
+            };
+            bool duplicate = false;
+            if (smart)
             {
+                const auto [begin, end] = index.equal_range(state.getAdvances());
+                for (auto entry = begin; entry != end && !duplicate; ++entry) duplicate = matches(states[entry->second]);
+            }
+            else duplicate = std::ranges::find_if(states, matches) != states.end();
+            if (!duplicate)
+            {
+                if (smart) index.emplace(state.getAdvances(), states.size());
                 states.emplace_back(state);
             }
         }
@@ -247,12 +259,12 @@ std::vector<State5> HiddenGrottoGenerator::generate(u64 seed, u32 initialAdvance
 
     std::vector<std::pair<u32, std::array<u8, 6>>> ivs;
 
-    RNGList<u8, MT, 8, gen> rngList(seed >> 32, initialAdvances + (bw ? 0 : 2));
+    Gen5::IVRNG rngList(seed >> 32, initialAdvances + (bw ? 0 : 2), u64(maxAdvances) + 6, smart);
     for (u32 cnt = 0; cnt <= maxAdvances; cnt++, rngList.advanceState())
     {
         std::array<u8, 6> iv;
         std::ranges::generate(iv, [&rngList] { return rngList.next(); });
-        if (filter.compareIV(iv))
+        if (smart ? Gen5::finalIVsPass(filter, iv) : filter.compareIV(iv))
         {
             ivs.emplace_back(initialAdvances + cnt, iv);
         }
@@ -274,6 +286,14 @@ std::vector<State5> HiddenGrottoGenerator::generate(u64 seed, const std::vector<
     BWRNG rng(seed, advances + initialAdvances);
     auto jump = rng.getJump(offset);
 
+    std::vector<std::pair<u32, std::array<u8, 6>>> passing;
+    const auto *activeIVs = &ivs;
+    if (smart && Gen5::constrainedIVs(filter))
+    {
+        for (const auto &iv : ivs) if (Gen5::finalIVsPass(filter, iv.second)) passing.push_back(iv);
+        if (passing.empty()) return {};
+        activeIVs = &passing;
+    }
     u8 range = slot.getMaxLevel() - slot.getMinLevel();
 
     // Even though hidden grotto can't be shiny it still respects the extra rolls from shiny charm
@@ -317,7 +337,8 @@ std::vector<State5> HiddenGrottoGenerator::generate(u64 seed, const std::vector<
         }
 
         u32 prng = rng.nextUInt();
-        for (const auto &iv : ivs)
+        if (smart && !Gen5::payloadPass(filter, ability, gender, nature, 0)) continue;
+        for (const auto &iv : *activeIVs)
         {
             State5 state(prng, advances + initialAdvances + cnt, iv.first, pid, iv.second, ability, gender, level, nature, 0, info);
             if (filter.compareState(static_cast<const State &>(state)))
@@ -328,4 +349,9 @@ std::vector<State5> HiddenGrottoGenerator::generate(u64 seed, const std::vector<
     }
 
     return states;
+}
+
+std::optional<GpuWild::IVPlan> HiddenGrottoGenerator::gpuIVPlan(u32 initialIVAdvances, u32 maxIVAdvances) const
+{
+    return GpuWild::ivPlan(smart, u64(initialIVAdvances) + ((profile.getVersion() & Game::BW) != Game::None ? 0 : 2), maxIVAdvances, false, filter);
 }

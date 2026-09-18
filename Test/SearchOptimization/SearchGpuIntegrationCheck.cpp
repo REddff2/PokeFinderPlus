@@ -24,6 +24,7 @@ static void wait(IVSearcher5<WildGenerator5,WildState5>&s,double timeout=120){
 }
 int main(int argc,char**argv){
     try{
+        SearchOptimization::setPruningEnabled(true);
         check(argc==3,"expected retained positive results and output JSON");
         std::ifstream f(argv[1]);json known=json::parse(f),report;Request r;GpuWild::IVBounds bounds{r.filter.low,r.filter.high};
         GpuWild::Options options;

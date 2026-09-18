@@ -20,6 +20,10 @@
 #ifndef DREAMRADARGENERATOR_HPP
 #define DREAMRADARGENERATOR_HPP
 
+#include <Core/Gen5/GPU/IVPlan.hpp>
+
+#include <Core/Util/SearchOptimization.hpp>
+
 #include <Core/Gen5/DreamRadarTemplate.hpp>
 #include <Core/Gen5/Profile5.hpp>
 #include <Core/Parents/Filters/StateFilter.hpp>
@@ -33,6 +37,7 @@ class DreamRadarState;
 class DreamRadarGenerator : public Generator<Profile5, StateFilter>
 {
 public:
+    bool optimizedPruningEnabled() const { return smart; }
     /**
      * @brief Construct a new DreamRadarGenerator object
      *
@@ -55,8 +60,12 @@ public:
      * @return Vector of computed states
      */
     std::vector<DreamRadarState> generate(u64 seed) const;
+    const std::array<u8, 6> &getMinIVs() const { return filter.getMinIVs(); }
+    const std::array<u8, 6> &getMaxIVs() const { return filter.getMaxIVs(); }
+    std::optional<GpuWild::IVPlan> gpuIVPlan() const;
 
 private:
+    const bool smart = SearchOptimization::pruningEnabled(SearchOptimization::Family::DreamRadar);
     DreamRadarTemplate radarTemplate;
     u8 ivAdvances;
     u8 level;

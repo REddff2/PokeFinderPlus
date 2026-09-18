@@ -39,7 +39,7 @@ int main(int argc,char**argv){
         auto smart=settings.findChild<QCheckBox*>("checkBoxSearchPruning"),gpu=settings.findChild<QCheckBox*>("checkBoxSearchGpu");
         auto group=settings.findChild<QGroupBox*>("groupBoxSearchOptimization");
         auto threads=settings.findChild<QComboBox*>("comboBoxThreads");
-        check(group&&group->title()=="Gen 5 Smart Search"&&group->findChildren<QCheckBox*>().size()==2,"exact native two-control section");
+        check(group&&group->title()=="Gen 5 Search Optimization"&&group->findChildren<QCheckBox*>().size()==11,"native master, nine families and GPU section");
         check(smart&&smart->text()=="Enable Gen 5 smart search optimizations"&&gpu&&gpu->text()=="Enable Gen 5 GPU acceleration","Gen 5 labels");
         check(smart->toolTip()=="Uses verified Gen 5 search optimizations where supported. Unsupported searches use normal PokeFinder behavior.","smart tooltip");
         check(gpu->toolTip()=="Uses a compatible GPU for supported Gen 5 smart-search workloads. Automatically falls back to the optimized CPU path.","GPU tooltip");

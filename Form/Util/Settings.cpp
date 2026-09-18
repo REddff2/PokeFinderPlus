@@ -27,13 +27,22 @@
 #include <QProcess>
 #include <QSettings>
 #include <QThread>
-#include <Core/Util/SearchOptimization.hpp>
+#include "SearchOptimizationSettings.hpp"
 
 Settings::Settings(QWidget *parent) : QWidget(parent), ui(new Ui::Settings)
 {
     ui->setupUi(this);
     setAttribute(Qt::WA_QuitOnClose, false);
     setAttribute(Qt::WA_DeleteOnClose);
+
+    ui->widgetSearchFamilies->hide();
+    connect(ui->toolButtonSearchAdvanced, &QToolButton::toggled, this, [this](bool expanded) {
+        ui->toolButtonSearchAdvanced->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
+        ui->widgetSearchFamilies->setVisible(expanded);
+        ui->verticalLayoutSearchOptimization->activate();
+        layout()->activate();
+        resize(width(), sizeHint().height());
+    });
 
     QSettings setting;
     setting.beginGroup("settings");
@@ -92,16 +101,36 @@ Settings::Settings(QWidget *parent) : QWidget(parent), ui(new Ui::Settings)
         }
     }
 
-    // Preserve the existing smart-search key; remove the retired Plus CPU limit.
-    setting.remove("plusSearchWorkerLimit");
-    const bool smart = setting.value("plusSearchPruning", SearchOptimization::DefaultPruning).toBool();
-    const bool gpu = smart && setting.value("plusSearchGpu", SearchOptimization::DefaultGpu).toBool();
-    if (!smart) setting.setValue("plusSearchGpu", false);
+    SearchOptimizationSettings::load(setting);
+    const bool smart = SearchOptimization::pruningEnabled();
+    const bool gpu = SearchOptimization::gpuEnabled();
     ui->checkBoxSearchPruning->setChecked(smart);
     ui->checkBoxSearchGpu->setChecked(gpu);
     ui->checkBoxSearchGpu->setEnabled(smart);
-    SearchOptimization::setPruningEnabled(smart);
-    SearchOptimization::setGpuEnabled(gpu);
+    ui->widgetSearchFamilies->setEnabled(smart);
+    ui->toolButtonSearchAdvanced->setVisible(smart);
+    const std::array<QCheckBox *, SearchOptimization::FamilyCount> familyBoxes = {
+        ui->checkBoxSearchWild,
+        ui->checkBoxSearchStatic,
+        ui->checkBoxSearchEvent,
+        ui->checkBoxSearchEggs,
+        ui->checkBoxSearchDreamRadar,
+        ui->checkBoxSearchHiddenGrotto,
+        ui->checkBoxSearchPickup,
+        ui->checkBoxSearchAdjacentSeeds,
+        ui->checkBoxSearchCacheBuilders
+    };
+    for (size_t i = 0; i < familyBoxes.size(); ++i)
+    {
+        const auto family = static_cast<SearchOptimization::Family>(i);
+        const QString key = QStringLiteral("settings/") + SearchOptimization::FamilyKeys[i];
+        auto *box = familyBoxes[i];
+        box->setChecked(SearchOptimization::familyEnabled(family));
+        connect(box, &QCheckBox::toggled, this, [family, key](bool enabled) {
+            SearchOptimization::setFamilyEnabled(family, enabled);
+            QSettings().setValue(key, enabled);
+        });
+    }
     setting.endGroup();
 
     connect(ui->checkBoxSearchPruning, &QCheckBox::toggled, this, [this](bool enabled) {
@@ -114,6 +143,15 @@ Settings::Settings(QWidget *parent) : QWidget(parent), ui(new Ui::Settings)
             settings.setValue("settings/plusSearchGpu", false);
         }
         ui->checkBoxSearchGpu->setEnabled(enabled);
+        ui->widgetSearchFamilies->setEnabled(enabled);
+        ui->toolButtonSearchAdvanced->setVisible(enabled);
+        if (!enabled)
+        {
+            ui->toolButtonSearchAdvanced->setChecked(false);
+        }
+        ui->verticalLayoutSearchOptimization->activate();
+        layout()->activate();
+        resize(width(), sizeHint().height());
     });
     connect(ui->checkBoxSearchGpu, &QCheckBox::toggled, this, [this](bool enabled) {
         enabled = enabled && ui->checkBoxSearchPruning->isChecked();
@@ -131,6 +169,8 @@ Settings::Settings(QWidget *parent) : QWidget(parent), ui(new Ui::Settings)
     {
         this->restoreGeometry(setting.value("settingsForm/geometry").toByteArray());
     }
+    layout()->activate();
+    resize(width(), sizeHint().height());
 }
 
 Settings::~Settings()

@@ -41,6 +41,9 @@ void SearcherBase5<Generator, State>::startSearch(int threads, const Date &start
         threads = days;
     }
 
+    // Snapshot before launching workers; conservative cold-start GPU threshold.
+    candidatesPerWorker = threads > 0 && days > 0 ? u64(days) * keypresses.size()
+        * (profile.getTimer0Max() - profile.getTimer0Min() + 1) * 86400 / threads : 0;
     this->activeThreads.store(threads);
     for (int i = 0; i < threads; i++)
     {

@@ -41,7 +41,7 @@ int wmain(int argc,wchar_t **argv){
         for(const auto&d:devices)info["devices"].push_back(d.data);
         auto description=info.dump();if(description.size()>=sizeof(shared->info))throw std::runtime_error("Device description overflow");
         memcpy(shared->info,description.c_str(),description.size()+1);
-        struct Queue {CL::H queue,src,out,count,compact,inspect;HANDLE request,done;};
+        struct Queue {CL::H queue,src,out,count,compact,inspect,ivCompact,ivInspect,cacheCompact;HANDLE request,done;};
         std::vector<Queue> qs;
         for(unsigned i=0;i<slots;++i){
             if(fault==L"allocation")throw std::runtime_error("injected allocation failure");
@@ -50,9 +50,12 @@ int wmain(int argc,wchar_t **argv){
             q.out=cl.CreateBuffer(ctx,1,Capacity*32,nullptr,&err);CL::check(err);
             q.count=cl.CreateBuffer(ctx,1,4,nullptr,&err);CL::check(err);
             q.compact=cl.CreateKernel(program,"compact",&err);CL::check(err);q.inspect=cl.CreateKernel(program,"inspect",&err);CL::check(err);
-            // Reject an old four-argument kernel before publishing readiness.
+            q.ivCompact=cl.CreateKernel(program,"ivCompact",&err);CL::check(err);
+            q.ivInspect=cl.CreateKernel(program,"ivInspect",&err);CL::check(err);
+            q.cacheCompact=cl.CreateKernel(program,"cacheCompact",&err);CL::check(err);
+            // Reject an old kernel before publishing readiness.
             CL::U bound=0;
-            for(auto kernel:{q.compact,q.inspect}){
+            for(auto kernel:{q.compact,q.inspect,q.ivCompact,q.ivInspect,q.cacheCompact}){
                 CL::check(cl.SetKernelArg(kernel,4,sizeof(bound),&bound));
                 CL::check(cl.SetKernelArg(kernel,5,sizeof(bound),&bound));
             }
@@ -71,11 +74,13 @@ int wmain(int argc,wchar_t **argv){
                     if(fault==L"execute")throw std::runtime_error("injected execution failure");
                     if(!s.n || s.n>Capacity)throw std::runtime_error("Batch outside capacity");
                     double start=now();CL::U zero=0,count=0;CL::H upload=nullptr,event=nullptr,readCount=nullptr,readOut=nullptr;
-                    auto k=s.inspect?q.inspect:q.compact;
+                    if(s.mode>2 || (s.mode==1 && (s.ivOffset>218 || s.ivRoamer>1)) || (s.mode==2 && (!s.ivRoamer || s.ivRoamer>8 || s.ivOffset+s.ivRoamer+31>224 || s.inspect)))throw std::runtime_error("Invalid IV plan");
+                    auto k=s.mode==2?q.cacheCompact:s.mode==1?(s.inspect?q.ivInspect:q.ivCompact):(s.inspect?q.inspect:q.compact);
                     CL::check(cl.SetKernelArg(k,0,sizeof(q.src),&q.src));CL::check(cl.SetKernelArg(k,1,sizeof(q.out),&q.out));
                     CL::check(cl.SetKernelArg(k,2,sizeof(q.count),&q.count));CL::check(cl.SetKernelArg(k,3,4,&s.n));
                     CL::check(cl.SetKernelArg(k,4,sizeof(s.ivMin),&s.ivMin));
                     CL::check(cl.SetKernelArg(k,5,sizeof(s.ivMax),&s.ivMax));
+                    if(s.mode!=0){CL::check(cl.SetKernelArg(k,6,sizeof(s.ivOffset),&s.ivOffset));CL::check(cl.SetKernelArg(k,7,sizeof(s.ivRoamer),&s.ivRoamer));}
                     CL::check(cl.EnqueueWriteBuffer(q.queue,q.src,0,0,size_t(s.n)*8,s.seeds,0,nullptr,&upload));
                     CL::check(cl.EnqueueWriteBuffer(q.queue,q.count,0,0,4,&zero,0,nullptr,nullptr));
                     size_t local=128,global=(s.n+127)/128*128;

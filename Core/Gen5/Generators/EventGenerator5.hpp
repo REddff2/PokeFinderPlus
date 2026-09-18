@@ -34,6 +34,7 @@ class EventState5;
 class EventGenerator5 : public Generator<Profile5, StateFilter>
 {
 public:
+    bool optimizedPruningEnabled() const { return optimizedPruning; }
     /**
      * @brief Construct a new EventGenerator5 object
      *
@@ -45,7 +46,7 @@ public:
      * @param filter State filter
      */
     EventGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, const PGF &pgf, const Profile5 &profile, const StateFilter &filter,
-                    bool optimizedPruning = SearchOptimization::pruningEnabled());
+                    bool optimizedPruning = SearchOptimization::pruningEnabled(SearchOptimization::Family::Event));
 
     /**
      * @brief Generates states

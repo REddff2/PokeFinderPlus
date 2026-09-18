@@ -23,6 +23,7 @@
 #include <Core/Gen5/Searchers/SearcherBase5.hpp>
 #include <fph/meta_fph_table.h>
 #include <Core/Gen5/GPU/Session.hpp>
+#include <Core/Gen5/OptimizationFamily.hpp>
 
 /**
  * @brief Parent searcher class for Static/Wild Gen 5 generators
@@ -48,6 +49,7 @@ public:
 
 private:
     std::shared_ptr<GpuWild::Session> gpu;
+    std::optional<GpuWild::IVPlan> gpuPlan;
     bool searchGpu(const Date &start, const Date &end);
     u32 initialAdvances;
     u32 maxAdvances;

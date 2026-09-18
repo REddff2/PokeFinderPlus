@@ -25,6 +25,8 @@
 #include <Core/Gen5/SHA1Cache.hpp>
 #include <Core/Parents/Searchers/SearcherBase.hpp>
 #include <Core/Util/DateTime.hpp>
+#include <fph/meta_fph_table.h>
+#include <optional>
 
 class IVCache;
 enum class DSType : u8;
@@ -37,6 +39,7 @@ enum class Language : u8;
 class SHA1CacheSearcher final : public SearcherBase<SHA1Seed>
 {
 public:
+    bool optimizedMembershipEnabled() const { return membership.has_value(); }
     /**
      * @brief Construct a new SHA1CacheSearcher object
      *
@@ -74,6 +77,11 @@ public:
     void writeResults(std::string_view file);
 
 private:
+    struct Membership
+    {
+        fph::MetaFphMap<u32, bool> entralink, normal, roamer;
+    };
+    std::optional<Membership> membership;
     Profile5 profile;
     std::vector<Keypress> keypresses;
     std::vector<u32> entralinkSeeds;

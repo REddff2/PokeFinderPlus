@@ -20,6 +20,8 @@
 #ifndef WILDGENERATOR5_HPP
 #define WILDGENERATOR5_HPP
 
+#include <Core/Gen5/GPU/IVPlan.hpp>
+
 #include <Core/Enum/Lead.hpp>
 #include <Core/Util/SearchOptimization.hpp>
 #include <Core/Gen5/EncounterArea5.hpp>
@@ -103,7 +105,7 @@ public:
     WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, Method method, const std::vector<Lead> &leads,
                    const std::vector<u8> &passPowers, bool searchMovingTrigger, bool requireMovingTrigger, const EncounterArea5 &area,
                    const Profile5 &profile, const WildStateFilter &filter, bool requirePassPowerIVAdvance = false,
-                   bool filterNonRequiredLeads = true, bool optimizedPruning = SearchOptimization::pruningEnabled(),
+                   bool filterNonRequiredLeads = true, bool optimizedPruning = SearchOptimization::pruningEnabled(SearchOptimization::Family::Wild),
                    const EncounterSettings5 &encounterSettings = { true, 255 });
 
     /**
@@ -116,6 +118,7 @@ public:
      * @return Vector of computed states
      */
     std::vector<WildState5> generate(u64 seed, u32 initialAdvances, u32 maxAdvances) const;
+    std::optional<GpuWild::IVPlan> gpuIVPlan(u32 initialIVAdvances, u32 maxIVAdvances) const;
 
     /**
      * @brief Generates states for the \p encounterArea

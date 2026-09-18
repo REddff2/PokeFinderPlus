@@ -20,6 +20,9 @@
 #ifndef EGGGENERATOR5_HPP
 #define EGGGENERATOR5_HPP
 
+#include <Core/Util/SearchOptimization.hpp>
+#include <optional>
+
 #include <Core/Gen5/Profile5.hpp>
 #include <Core/Parents/Filters/StateFilter.hpp>
 #include <Core/Parents/Generators/EggGenerator.hpp>
@@ -33,6 +36,7 @@ class PersonalInfo;
 class EggGenerator5 : public EggGenerator<Profile5, StateFilter>
 {
 public:
+    bool optimizedPruningEnabled() const { return smart; }
     /**
      * @brief Construct a new EggGenerator5 object
      *
@@ -56,15 +60,19 @@ public:
     std::vector<EggState5> generate(u64 seed) const;
 
 private:
+    const bool smart = SearchOptimization::pruningEnabled(SearchOptimization::Family::Eggs);
+    bool pruneIVs = false;
+    bool pruneNature = false;
+    bool pruneAbility = false;
     bool ditto;
     u8 everstone;
     u8 parentAbility;
     u8 poweritem;
     u8 rolls;
 
-    std::vector<EggState5> generateBW(u64 seed) const;
+    template <bool prune> std::vector<EggState5> generateBW(u64 seed) const;
     std::vector<EggState5> generateBW2(u64 seed) const;
-    EggState5 generateBW2Egg(u64 seed, const PersonalInfo **info) const;
+    template <bool prune> std::optional<EggState5> generateBW2Egg(u64 seed, const PersonalInfo **info) const;
 };
 
 #endif // EGGGENERATOR5_HPP

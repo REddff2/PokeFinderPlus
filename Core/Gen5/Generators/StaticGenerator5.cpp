@@ -18,6 +18,9 @@
  */
 
 #include "StaticGenerator5.hpp"
+#include "IVRNG.hpp"
+#include "SmartFilter.hpp"
+#include <unordered_map>
 #include <Core/Enum/Lead.hpp>
 #include <Core/Gen5/States/State5.hpp>
 #include <Core/RNG/LCRNG64.hpp>
@@ -38,9 +41,20 @@ static bool matches(const State5 &left, const State5 &right)
         && left.getIVs() == right.getIVs();
 }
 
-static void addState(std::vector<State5> &states, const State5 &state, Lead lead)
+static void addState(std::vector<State5> &states, const State5 &state, Lead lead,
+                     std::unordered_multimap<u64, size_t> *index)
 {
-    auto iter = std::ranges::find_if(states, [&state](const State5 &other) { return matches(state, other); });
+    auto iter = states.end();
+    const u64 key = (u64(state.getAdvances()) << 32) | state.getIVAdvances();
+    if (index)
+    {
+        const auto [begin, end] = index->equal_range(key);
+        size_t first = states.size();
+        for (auto entry = begin; entry != end; ++entry)
+            if (entry->second < first && matches(state, states[entry->second])) first = entry->second;
+        if (first < states.size()) iter = states.begin() + first;
+    }
+    else iter = std::ranges::find_if(states, [&state](const State5 &other) { return matches(state, other); });
     if (iter != states.end())
     {
         if (lead == Lead::None)
@@ -54,6 +68,7 @@ static void addState(std::vector<State5> &states, const State5 &state, Lead lead
     }
     else
     {
+        if (index) index->emplace(key, states.size());
         states.emplace_back(state);
     }
 }
@@ -127,8 +142,8 @@ std::vector<State5> StaticGenerator5::generate(u64 seed, u32 initialAdvances, u3
 
     std::vector<std::pair<u32, std::array<u8, 6>>> ivs;
 
-    RNGList<u8, MT, 8, gen> rngList(seed >> 32,
-                                    initialAdvances + (bw ? 0 : 2) + ((staticTemplate.getEgg() || staticTemplate.getRoamer()) ? 1 : 0));
+    Gen5::IVRNG rngList(seed >> 32, initialAdvances + (bw ? 0 : 2)
+        + ((staticTemplate.getEgg() || staticTemplate.getRoamer()) ? 1 : 0), u64(maxAdvances) + 6, smart);
     for (u32 cnt = 0; cnt <= maxAdvances; cnt++, rngList.advanceState())
     {
         std::array<u8, 6> iv;
@@ -150,7 +165,7 @@ std::vector<State5> StaticGenerator5::generate(u64 seed, u32 initialAdvances, u3
             iv[5] = rngList.next();
         }
 
-        if (filter.compareIV(iv))
+        if (smart ? Gen5::finalIVsPass(filter, iv) : filter.compareIV(iv))
         {
             ivs.emplace_back(initialAdvances + cnt, iv);
         }
@@ -168,6 +183,14 @@ std::vector<State5> StaticGenerator5::generate(u64 seed, u32 initialAdvances, u3
 
 std::vector<State5> StaticGenerator5::generate(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs) const
 {
+    // Cache-provided IVs are final too; retain order and duplicate occurrences.
+    if (smart && Gen5::constrainedIVs(filter))
+    {
+        std::vector<std::pair<u32, std::array<u8, 6>>> passing;
+        for (const auto &iv : ivs) if (Gen5::finalIVsPass(filter, iv.second)) passing.push_back(iv);
+        if (passing.empty()) return {};
+        return staticTemplate.getWild() ? generateWild(seed, passing) : generateNonWild(seed, passing);
+    }
     if (staticTemplate.getWild())
     {
         return generateWild(seed, ivs);
@@ -213,6 +236,7 @@ std::vector<State5> StaticGenerator5::generateNonWild(u64 seed, const std::vecto
         u8 nature = go.nextUInt(25);
 
         u32 prng = rng.nextUInt();
+        if (smart && !Gen5::payloadPass(filter, ability, gender, nature, shiny)) continue;
         for (const auto &iv : ivs)
         {
             State5 state(prng, advances + initialAdvances + cnt, iv.first, pid, iv.second, ability, gender, staticTemplate.getLevel(),
@@ -230,6 +254,7 @@ std::vector<State5> StaticGenerator5::generateNonWild(u64 seed, const std::vecto
 std::vector<State5> StaticGenerator5::generateWild(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs) const
 {
     std::vector<State5> states;
+    std::unordered_multimap<u64, size_t> index;
     for (u8 activeLuckyPower : luckyPowers)
     {
         std::vector<std::pair<u32, std::array<u8, 6>>> powerIVs;
@@ -258,7 +283,7 @@ std::vector<State5> StaticGenerator5::generateWild(u64 seed, const std::vector<s
                     continue;
                 }
 
-                addState(states, state, activeLead);
+                addState(states, state, activeLead, smart ? &index : nullptr);
             }
         }
     }
@@ -346,6 +371,7 @@ std::vector<State5> StaticGenerator5::generateWild(u64 seed, const std::vector<s
         }
 
         u32 prng = rng.nextUInt();
+        if (smart && !Gen5::payloadPass(filter, ability, gender, nature, shiny)) continue;
         for (const auto &iv : ivs)
         {
             State5 state(prng, advances + initialAdvances + cnt, iv.first, pid, iv.second, ability, gender, staticTemplate.getLevel(),
@@ -358,4 +384,11 @@ std::vector<State5> StaticGenerator5::generateWild(u64 seed, const std::vector<s
     }
 
     return states;
+}
+
+std::optional<GpuWild::IVPlan> StaticGenerator5::gpuIVPlan(u32 initialIVAdvances, u32 maxIVAdvances) const
+{
+    const u64 offset = u64(initialIVAdvances) + ((profile.getVersion() & Game::BW) != Game::None ? 0 : 2)
+        + ((staticTemplate.getEgg() || staticTemplate.getRoamer()) ? 1 : 0);
+    return GpuWild::ivPlan(smart, offset, maxIVAdvances, staticTemplate.getRoamer(), filter);
 }

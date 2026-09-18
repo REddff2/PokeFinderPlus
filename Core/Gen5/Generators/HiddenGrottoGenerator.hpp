@@ -20,6 +20,10 @@
 #ifndef HIDDENGROTTOGENERATOR_HPP
 #define HIDDENGROTTOGENERATOR_HPP
 
+#include <Core/Gen5/GPU/IVPlan.hpp>
+
+#include <Core/Util/SearchOptimization.hpp>
+
 #include <Core/Enum/PassPower.hpp>
 #include <Core/Gen5/Filters/HiddenGrottoFilter.hpp>
 #include <Core/Gen5/HiddenGrottoArea.hpp>
@@ -38,6 +42,7 @@ enum class Lead : u8;
 class HiddenGrottoSlotGenerator : public Generator<Profile5, HiddenGrottoFilter>
 {
 public:
+    bool optimizedPruningEnabled() const { return smart; }
     /**
      * @brief Construct a new HiddenGrottoSlotGenerator object
      *
@@ -67,6 +72,7 @@ public:
     std::vector<HiddenGrottoState> generate(u64 seed) const;
 
 private:
+    const bool smart = SearchOptimization::pruningEnabled(SearchOptimization::Family::HiddenGrotto);
     HiddenGrottoArea encounterArea;
     u16 item;
     u8 minItemAmount;
@@ -104,6 +110,11 @@ public:
      * @return Vector of computed states
      */
     std::vector<State5> generate(u64 seed, u32 initialAdvances, u32 maxAdvances) const;
+    const std::array<u8, 6> &getMinIVs() const { return filter.getMinIVs(); }
+    const std::array<u8, 6> &getMaxIVs() const { return filter.getMaxIVs(); }
+    std::optional<GpuWild::IVPlan> gpuIVPlan(u32 initialIVAdvances, u32 maxIVAdvances) const;
+
+    bool optimizedPruningEnabled() const { return smart; }
 
     /**
      * @brief Generates states for the \p encounterArea
@@ -116,6 +127,7 @@ public:
     std::vector<State5> generate(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs) const;
 
 private:
+    const bool smart = SearchOptimization::pruningEnabled(SearchOptimization::Family::HiddenGrotto);
     HiddenGrottoSlot slot;
     Lead lead;
     u8 gender;

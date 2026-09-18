@@ -18,6 +18,7 @@
  */
 
 #include "EggGenerator5.hpp"
+#include "SmartFilter.hpp"
 #include <Core/Enum/Game.hpp>
 #include <Core/Enum/Method.hpp>
 #include <Core/Enum/Shiny.hpp>
@@ -38,6 +39,12 @@ EggGenerator5::EggGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, c
     poweritem(daycare.getPowerItemCount()),
     rolls(((profile.getVersion() & Game::BW2) != Game::None && profile.getShinyCharm() ? 2 : 0) + (daycare.getMasuda() ? 5 : 0))
 {
+    if (smart)
+    {
+        pruneIVs = Gen5::constrainedIVs(filter);
+        for (u8 i = 0; i < 25; ++i) pruneNature |= !filter.compareNature(i);
+        for (u8 i = 0; i < 3; ++i) pruneAbility |= !filter.compareAbility(i);
+    }
 }
 
 std::vector<EggState5> EggGenerator5::generate(u64 seed) const
@@ -46,7 +53,7 @@ std::vector<EggState5> EggGenerator5::generate(u64 seed) const
     {
     case Game::Black:
     case Game::White:
-        return generateBW(seed);
+        return pruneIVs || pruneNature ? generateBW<true>(seed) : generateBW<false>(seed);
     case Game::Black2:
     case Game::White2:
         return generateBW2(seed);
@@ -55,6 +62,7 @@ std::vector<EggState5> EggGenerator5::generate(u64 seed) const
     }
 }
 
+template <bool prune>
 std::vector<EggState5> EggGenerator5::generateBW(u64 seed) const
 {
     const PersonalInfo *base = PersonalLoader::getPersonal(profile.getVersion(), daycare.getEggSpecie());
@@ -115,6 +123,10 @@ std::vector<EggState5> EggGenerator5::generateBW(u64 seed) const
             }
         }
 
+        // Everstone has finalized nature. Rejection only discards the local go.
+        if constexpr (prune)
+            if (pruneNature && !filter.compareNature(nature)) { rng.nextUInt(); continue; }
+
         // Reroll ability to remove HA
         bool hiddenAbility = false;
         if (ditto)
@@ -166,6 +178,10 @@ std::vector<EggState5> EggGenerator5::generateBW(u64 seed) const
             }
         }
 
+        // Never reject the MT IVs before power items and inheritance finish.
+        if constexpr (prune)
+            if (pruneIVs && !Gen5::finalIVsPass(filter, ivs)) { rng.nextUInt(); continue; }
+
         u32 pid = go.nextUInt(0xffffffff);
         for (u8 i = 0; i < rolls && !Utilities::isShiny<true>(pid, tsv); i++)
         {
@@ -195,7 +211,9 @@ std::vector<EggState5> EggGenerator5::generateBW2(u64 seed) const
     eggSeed |= mt.next();
 
     const PersonalInfo *info = nullptr;
-    EggState5 state = generateBW2Egg(eggSeed, &info);
+    auto egg = pruneIVs || pruneNature || pruneAbility ? generateBW2Egg<true>(eggSeed, &info) : generateBW2Egg<false>(eggSeed, &info);
+    if (!egg) return states;
+    EggState5 state = *egg;
     u8 ability = state.getAbility() == 2 ? 0 : state.getAbility();
 
     if (filter.compareAbility(state.getAbility()) && filter.compareNature(state.getNature()) && filter.compareIV(state.getIVs())
@@ -230,7 +248,8 @@ std::vector<EggState5> EggGenerator5::generateBW2(u64 seed) const
     return states;
 }
 
-EggState5 EggGenerator5::generateBW2Egg(u64 seed, const PersonalInfo **info) const
+template <bool prune>
+std::optional<EggState5> EggGenerator5::generateBW2Egg(u64 seed, const PersonalInfo **info) const
 {
     BWRNG rng(seed);
 
@@ -276,6 +295,8 @@ EggState5 EggGenerator5::generateBW2Egg(u64 seed, const PersonalInfo **info) con
         nature = daycare.getParentNature(parent);
     }
 
+    // This egg-seed RNG is independent of the per-frame PID stream.
+    if constexpr (prune) if (pruneNature && !filter.compareNature(nature)) return std::nullopt;
     u8 ability;
     if (!ditto)
     {
@@ -299,6 +320,7 @@ EggState5 EggGenerator5::generateBW2Egg(u64 seed, const PersonalInfo **info) con
         ability = rng.nextUInt(2);
     }
 
+    if constexpr (prune) if (pruneAbility && !filter.compareAbility(ability)) return std::nullopt;
     // Power Items
     u8 inheritanceCount = 0;
     std::array<u8, 6> inheritance = { 0, 0, 0, 0, 0, 0 };
@@ -346,5 +368,6 @@ EggState5 EggGenerator5::generateBW2Egg(u64 seed, const PersonalInfo **info) con
         }
     }
 
+    if constexpr (prune) if (pruneIVs && !Gen5::finalIVsPass(filter, ivs)) return std::nullopt;
     return EggState5(ivs, ability, nature, inheritance, *info);
 }

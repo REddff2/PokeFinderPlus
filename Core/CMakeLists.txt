@@ -373,7 +373,7 @@ if (ENABLE_SIMD)
     endif ()
 endif()
 
-# The optional backend loads the system OpenCL driver inside a separate process.
+# OpenCL remains process-isolated and dynamically loaded. No driver/loader link.
 if(WIN32)
     configure_file(Gen5/GPU/Gen5Wild.cl "${CMAKE_BINARY_DIR}/Gen5Wild.cl" COPYONLY)
 endif()

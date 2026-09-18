@@ -72,3 +72,69 @@ if(WIN32)
         endif()
     endif()
 endif()
+
+
+add_executable(Gen5CoverageCheck Gen5CoverageCheck.cpp
+    coverage-baseline/CoverageBaselineStaticGenerator5.cpp
+    coverage-baseline/CoverageBaselineEggGenerator5.cpp
+    coverage-baseline/CoverageBaselineDreamRadarGenerator.cpp
+    coverage-baseline/CoverageBaselineHiddenGrottoGenerator.cpp
+    coverage-baseline/CoverageBaselinePickupGenerator.cpp
+    coverage-baseline/CoverageBaselineAdjacentSeedsCalculator.cpp)
+target_link_libraries(Gen5CoverageCheck PRIVATE PokeFinderCore Qt6::Core Threads::Threads)
+add_test(NAME Gen5CoverageEquivalence COMMAND Gen5CoverageCheck)
+
+if(WIN32)
+    add_executable(Gen5GpuCoverageCheck Gen5GpuCoverageCheck.cpp
+        BaselineWildGenerator5.cpp
+        coverage-baseline/CoverageBaselineStaticGenerator5.cpp
+        coverage-baseline/CoverageBaselineEggGenerator5.cpp
+        coverage-baseline/CoverageBaselineDreamRadarGenerator.cpp
+        coverage-baseline/CoverageBaselineHiddenGrottoGenerator.cpp
+        coverage-baseline/CoverageBaselinePickupGenerator.cpp
+        coverage-baseline/CoverageBaselineAdjacentSeedsCalculator.cpp)
+    target_link_libraries(Gen5GpuCoverageCheck PRIVATE PokeFinderCore Qt6::Core Threads::Threads)
+endif()
+
+add_executable(Gen5InfrastructureCheck Gen5InfrastructureCheck.cpp
+    coverage-baseline/CoverageBaselineStaticGenerator5.cpp
+    coverage-baseline/CoverageBaselineEggGenerator5.cpp
+    coverage-baseline/CoverageBaselineDreamRadarGenerator.cpp
+    coverage-baseline/CoverageBaselineHiddenGrottoGenerator.cpp
+    coverage-baseline/CoverageBaselinePickupGenerator.cpp
+    coverage-baseline/CoverageBaselineAdjacentSeedsCalculator.cpp
+    coverage-baseline/CoverageBaselineIVCacheSearcher.cpp
+    coverage-baseline/CoverageBaselineSHA1CacheSearcher.cpp)
+target_link_libraries(Gen5InfrastructureCheck PRIVATE PokeFinderCore Qt6::Core Threads::Threads)
+add_test(NAME Gen5Infrastructure COMMAND Gen5InfrastructureCheck "${CMAKE_CURRENT_BINARY_DIR}/infrastructure")
+
+if(WIN32)
+    add_executable(Gen5GpuIntegrationCheck Gen5GpuIntegrationCheck.cpp
+        coverage-baseline/CoverageBaselineStaticGenerator5.cpp
+        coverage-baseline/CoverageBaselineEggGenerator5.cpp
+        coverage-baseline/CoverageBaselineDreamRadarGenerator.cpp
+        coverage-baseline/CoverageBaselineHiddenGrottoGenerator.cpp
+        coverage-baseline/CoverageBaselinePickupGenerator.cpp
+        coverage-baseline/CoverageBaselineAdjacentSeedsCalculator.cpp)
+    target_link_libraries(Gen5GpuIntegrationCheck PRIVATE PokeFinderCore Qt6::Core Threads::Threads)
+endif()
+
+add_executable(Gen5CoverageUiCheck Gen5CoverageUiCheck.cpp)
+target_link_libraries(Gen5CoverageUiCheck PRIVATE PokeFinderForm PokeFinderModel PokeFinderPlusPluginManager PokeFinderCore Qt6::Widgets Qt6::Test)
+
+# Family preferences gate only the previously verified Gen 5 paths.
+add_executable(Gen5FamilyControlCheck Gen5FamilyControlCheck.cpp
+    BaselineEventGenerator5.cpp BaselineWildGenerator5.cpp
+    coverage-baseline/CoverageBaselineStaticGenerator5.cpp
+    coverage-baseline/CoverageBaselineEggGenerator5.cpp
+    coverage-baseline/CoverageBaselineDreamRadarGenerator.cpp
+    coverage-baseline/CoverageBaselineHiddenGrottoGenerator.cpp
+    coverage-baseline/CoverageBaselinePickupGenerator.cpp
+    coverage-baseline/CoverageBaselineAdjacentSeedsCalculator.cpp)
+target_link_libraries(Gen5FamilyControlCheck PRIVATE PokeFinderCore Qt6::Core Threads::Threads)
+add_test(NAME Gen5FamilyControls COMMAND Gen5FamilyControlCheck "${CMAKE_CURRENT_BINARY_DIR}/family-controls")
+add_executable(Gen5FamilySettingsCheck Gen5FamilySettingsCheck.cpp)
+target_link_libraries(Gen5FamilySettingsCheck PRIVATE PokeFinderForm PokeFinderModel PokeFinderPlusPluginManager PokeFinderCore Qt6::Widgets Qt6::Test)
+
+add_executable(SearchOptimizationUiCheck SearchOptimizationUiCheck.cpp)
+target_link_libraries(SearchOptimizationUiCheck PRIVATE PokeFinderForm PokeFinderModel PokeFinderPlusPluginManager PokeFinderCore Qt6::Widgets Qt6::Test)

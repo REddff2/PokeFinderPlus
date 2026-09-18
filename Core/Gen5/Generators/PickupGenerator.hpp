@@ -20,6 +20,10 @@
 #ifndef PICKUPGENERATOR_HPP
 #define PICKUPGENERATOR_HPP
 
+#include <Core/Gen5/GPU/IVPlan.hpp>
+
+#include <Core/Util/SearchOptimization.hpp>
+
 #include <Core/Gen5/EncounterArea5.hpp>
 #include <Core/Global.hpp>
 #include <Core/Gen5/Profile5.hpp>
@@ -33,6 +37,7 @@ class PickupState;
 class PickupGenerator
 {
 public:
+    bool optimizedPruningEnabled() const { return smart; }
     struct Slot
     {
         bool active;
@@ -52,10 +57,14 @@ public:
                     const Profile5 &profile, const WildStateFilter &filter, bool includeInvalid = false);
 
     std::vector<PickupState> generate(u64 seed, u32 ivAdvances = 0) const;
+    const std::array<u8, 6> &getMinIVs() const { return filter.getMinIVs(); }
+    const std::array<u8, 6> &getMaxIVs() const { return filter.getMaxIVs(); }
+    std::optional<GpuWild::IVPlan> gpuIVPlan() const;
 
     static std::vector<u16> getLevelItems(u8 level);
 
 private:
+    const bool smart = SearchOptimization::pruningEnabled(SearchOptimization::Family::Pickup);
     bool compare(const std::array<u16, 6> &items) const;
     u16 getPickupItem(u8 level, u8 itemRand) const;
 

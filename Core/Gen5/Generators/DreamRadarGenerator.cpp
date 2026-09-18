@@ -18,6 +18,8 @@
  */
 
 #include "DreamRadarGenerator.hpp"
+#include "IVRNG.hpp"
+#include "SmartFilter.hpp"
 #include <Core/Enum/Method.hpp>
 #include <Core/Gen5/States/DreamRadarState.hpp>
 #include <Core/Parents/PersonalInfo.hpp>
@@ -75,7 +77,8 @@ std::vector<DreamRadarState> DreamRadarGenerator::generate(u64 seed) const
         rng.next();
     }
 
-    RNGList<u8, MT, 8, gen> rngList(seed >> 32, (initialAdvances * 2) + ivAdvances + 9);
+    Gen5::IVRNG rngList(seed >> 32, (initialAdvances * 2) + ivAdvances + 9, u64(maxAdvances) * 2 + 6, smart);
+    const bool pruneIVs = smart && Gen5::constrainedIVs(filter);
 
     std::vector<DreamRadarState> states;
     for (u32 cnt = 0; cnt <= maxAdvances; cnt++, rngList.advanceStates(2), rng.next())
@@ -84,6 +87,10 @@ std::vector<DreamRadarState> DreamRadarGenerator::generate(u64 seed) const
 
         std::array<u8, 6> ivs;
         std::ranges::generate(ivs, [&rngList] { return rngList.next(); });
+
+        // All slot/genie offsets were applied before this window. Both outer
+        // RNG steps must survive rejection: this one and the loop increment.
+        if (pruneIVs && !Gen5::finalIVsPass(filter, ivs)) { rng.nextUInt(8); continue; }
 
         go.next();
 
@@ -99,7 +106,9 @@ std::vector<DreamRadarState> DreamRadarGenerator::generate(u64 seed) const
 
         u8 nature = go.nextUInt(25);
 
-        DreamRadarState state(rng.nextUInt(8), initialAdvances + cnt, pid, ivs, ability, gender, level, nature, 0, info);
+        const u8 needle = rng.nextUInt(8);
+        if (smart && !Gen5::payloadPass(filter, ability, gender, nature, 0)) continue;
+        DreamRadarState state(needle, initialAdvances + cnt, pid, ivs, ability, gender, level, nature, 0, info);
         if (filter.compareState(static_cast<const State &>(state)))
         {
             states.emplace_back(state);
@@ -107,4 +116,9 @@ std::vector<DreamRadarState> DreamRadarGenerator::generate(u64 seed) const
     }
 
     return states;
+}
+
+std::optional<GpuWild::IVPlan> DreamRadarGenerator::gpuIVPlan() const
+{
+    return GpuWild::ivPlan(smart, u64(initialAdvances) * 2 + ivAdvances + 9, maxAdvances, false, filter);
 }

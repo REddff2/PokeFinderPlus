@@ -18,6 +18,7 @@
  */
 
 #include "SHA1CacheSearcher.hpp"
+#include <Core/Util/SearchOptimization.hpp>
 #include <Core/Enum/Buttons.hpp>
 #include <Core/Enum/DSType.hpp>
 #include <Core/Enum/Game.hpp>
@@ -45,6 +46,17 @@ SHA1CacheSearcher::SHA1CacheSearcher(const IVCache &ivCache, const Profile5 &pro
     entralinkSeeds = ivCache.getSeeds(profile.getVersion(), CacheType::Entralink);
     normalSeeds = ivCache.getSeeds(profile.getVersion(), CacheType::Normal);
     roamerSeeds = ivCache.getSeeds(profile.getVersion(), CacheType::Roamer);
+    if (SearchOptimization::pruningEnabled(SearchOptimization::Family::CacheBuilders))
+    {
+        try
+        {
+            membership.emplace();
+            for (u32 seed : entralinkSeeds) membership->entralink.emplace(seed, true);
+            for (u32 seed : normalSeeds) membership->normal.emplace(seed, true);
+            for (u32 seed : roamerSeeds) membership->roamer.emplace(seed, true);
+        }
+        catch (const std::exception &) { membership.reset(); } // Optional index: keep native binary search.
+    }
 }
 
 void SHA1CacheSearcher::startSearch(int threads)
@@ -140,20 +152,20 @@ void SHA1CacheSearcher::search(const Date &start, const Date &end)
 
                     for (u32 i = 0; i < seeds.size(); i++)
                     {
-                        if (std::ranges::binary_search(entralinkSeeds, seeds[i] >> 32))
+                        if (membership ? membership->entralink.contains(u32(seeds[i] >> 32)) : std::ranges::binary_search(entralinkSeeds, seeds[i] >> 32))
                         {
                             std::lock_guard<std::mutex> lock(this->mutex);
                             this->results.emplace_back(toInt(keypress.button), time + i, day.getJD() - Date().getJD(), timer0, seeds[i]);
                         }
 
-                        if (std::ranges::binary_search(normalSeeds, seeds[i] >> 32))
+                        if (membership ? membership->normal.contains(u32(seeds[i] >> 32)) : std::ranges::binary_search(normalSeeds, seeds[i] >> 32))
                         {
                             std::lock_guard<std::mutex> lock(this->mutex);
                             this->normalResults.emplace_back(toInt(keypress.button), time + i, day.getJD() - Date().getJD(), timer0,
                                                              seeds[i]);
                         }
 
-                        if (std::ranges::binary_search(roamerSeeds, seeds[i] >> 32))
+                        if (membership ? membership->roamer.contains(u32(seeds[i] >> 32)) : std::ranges::binary_search(roamerSeeds, seeds[i] >> 32))
                         {
                             std::lock_guard<std::mutex> lock(this->mutex);
                             this->roamerResults.emplace_back(toInt(keypress.button), time + i, day.getJD() - Date().getJD(), timer0,

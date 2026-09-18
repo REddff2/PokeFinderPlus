@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include "Protocol.hpp"
 #include "IVBounds.hpp"
+#include "IVPlan.hpp"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <atomic>
@@ -69,9 +70,11 @@ public:
     ~Backend(){if(process){TerminateProcess(process,0);WaitForSingleObject(process,2000);CloseHandle(process);}if(job)CloseHandle(job);if(shared)UnmapViewOfFile(shared);if(mapping)CloseHandle(mapping);if(ready)CloseHandle(ready);for(unsigned i=0;i<Slots;++i){if(request[i])CloseHandle(request[i]);if(done[i])CloseHandle(done[i]);}}
     Backend(const Backend&)=delete;
     bool available(){std::lock_guard lock(mutex);return enabled;}
+    bool independentIVUseful() const { return !device.empty() && !device["device"]["unified_memory"].get<bool>(); }
     // nullopt means replay the ENTIRE uncommitted input using current CPU code.
     // No results are published until one whole batch has completed and validated.
-    std::optional<std::vector<uint32_t>> execute(const std::vector<uint64_t>&seeds,const IVBounds &bounds,bool inspect=false,const std::atomic<bool>* cancelled=nullptr){
+    std::optional<std::vector<uint32_t>> execute(const std::vector<uint64_t>&seeds,const IVBounds &bounds,bool inspect=false,const std::atomic<bool>* cancelled=nullptr,std::optional<IVPlan> plan={}){
+        if(plan && !plan->valid())return std::nullopt;
         if(!bounds.valid())return std::nullopt;
         if(seeds.empty())return std::vector<uint32_t>{};
         if(seeds.size()>Capacity)throw std::runtime_error("Batch exceeds transport capacity");
@@ -87,6 +90,7 @@ public:
         auto &s=shared->slots[slot];double copying=now();
         memcpy(s.seeds,seeds.data(),seeds.size()*8);s.n=uint32_t(seeds.size());s.inspect=inspect;s.count=0;
         s.ivMin=bounds.packedMin();s.ivMax=bounds.packedMax();
+        s.mode=plan?(plan->cacheFrames?2:1):0;s.ivOffset=plan?plan->offset:0;s.ivRoamer=plan?(plan->cacheFrames?plan->cacheFrames:plan->roamer):0;
         double copyElapsed=now()-copying;
         SetEvent(request[slot]);HANDLE events[]={done[slot],process};auto status=waitFor(events,timeout,cancelled);
         std::optional<std::vector<uint32_t>> output;

@@ -428,6 +428,7 @@ static bool matchesPayloadWorkload(const Profile5 &profile, const EncounterArea5
     }();
     // Any legal IV interval is safe: bounds do not affect the independent payload
     // RNG. All non-IV criteria must still match this proven request exactly.
+    // GPU batches receive these actual bounds; CPU finalization revalidates them.
     if (!filter.isIVSubsetOf(requiredFilter)) return false;
 
     // Match the actual spring table, including all slot metadata and personal-info
@@ -453,8 +454,8 @@ WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset,
                                bool requirePassPowerIVAdvance, bool filterNonRequiredLeads, bool optimizedPruning,
                                const EncounterSettings5 &encounterSettings) :
     WildGenerator(initialAdvances, maxAdvances, offset, method, leads.empty() ? Lead::None : leads.front(), area, profile, filter),
-    optimizedPruning(optimizedPruning),
-    payloadFirst(optimizedPruning && method == Method::Method5 && initialAdvances == 0 && maxAdvances == 0 && offset == 0
+    optimizedPruning(optimizedPruning && SearchOptimization::pruningEnabled(SearchOptimization::Family::Wild)),
+    payloadFirst(this->optimizedPruning && method == Method::Method5 && initialAdvances == 0 && maxAdvances == 0 && offset == 0
                  && !searchMovingTrigger && !requireMovingTrigger && filterNonRequiredLeads
                  && leads.size() == 1 && leads.front() == Lead::None
                  && passPowers.size() == 1 && passPowers.front() == PassPower5::None
@@ -467,7 +468,7 @@ WildGenerator5::WildGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset,
     requirePassPowerIVAdvance(requirePassPowerIVAdvance),
     filterNonRequiredLeads(filterNonRequiredLeads)
 {
-    if (optimizedPruning)
+    if (this->optimizedPruning)
     {
         std::array<u8, 6> low {}, high;
         high.fill(31);
@@ -1032,4 +1033,11 @@ std::vector<WildState5> WildGenerator5::generate(u64 seed, const std::vector<std
     }
 
     return states;
+}
+
+std::optional<GpuWild::IVPlan> WildGenerator5::gpuIVPlan(u32 initialIVAdvances, u32 maxIVAdvances) const
+{
+    // Item rows can bypass Pokemon filters. Preserve that exception on CPU.
+    if (canYieldPhenomenonItem(area.getEncounter()) || method != Method::Method5) return std::nullopt;
+    return GpuWild::ivPlan(optimizedPruning, u64(initialIVAdvances) + ((profile.getVersion() & Game::BW) != Game::None ? 0 : 2), maxIVAdvances, false, filter);
 }

@@ -18,6 +18,8 @@
  */
 
 #include "AdjacentSeedsCalculator.hpp"
+#include <Core/Gen5/Generators/IVRNG.hpp>
+#include <Core/Util/SearchOptimization.hpp>
 #include <Core/Enum/Game.hpp>
 #include <Core/Gen5/Keypresses.hpp>
 #include <Core/RNG/LCRNG64.hpp>
@@ -40,6 +42,8 @@ namespace AdjacentSeedsCalculator
                                              const DateTime &dateTime, const std::array<u8, 6> &minIVs, const std::array<u8, 6> &maxIVs,
                                              const Profile5 &profile)
     {
+        const bool smart = SearchOptimization::pruningEnabled(SearchOptimization::Family::AdjacentSeeds);
+        if (minIVAdvance > maxIVAdvance) return {};
         u32 timer0Min = profile.getTimer0Min() == 0 ? 0 : profile.getTimer0Min() - 1;
         u32 timer0Max = profile.getTimer0Max() + 1;
 
@@ -69,7 +73,8 @@ namespace AdjacentSeedsCalculator
                 auto alpha = sha.precompute();
                 u64 seed = sha.hashSeed(alpha);
 
-                RNGList<u8, MT, 8, gen> rngList(seed >> 32, minIVAdvance + (bw ? 0 : 2) + (roamer ? 1 : 0));
+                Gen5::IVRNG rngList(seed >> 32, minIVAdvance + (bw ? 0 : 2) + (roamer ? 1 : 0),
+                    u64(maxIVAdvance) - minIVAdvance + 6, smart);
                 for (u32 ivAdvance = minIVAdvance; ivAdvance <= maxIVAdvance; ivAdvance++, rngList.advanceState())
                 {
                     std::array<u8, 6> ivs;

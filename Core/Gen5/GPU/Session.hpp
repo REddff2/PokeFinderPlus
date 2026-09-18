@@ -3,6 +3,8 @@
 
 #include <Core/Global.hpp>
 #include "IVBounds.hpp"
+#include "IVPlan.hpp"
+#include <Core/Util/SearchOptimization.hpp>
 #include <atomic>
 #include <memory>
 #include <optional>
@@ -30,7 +32,7 @@ namespace GpuWild
         Session(const Session &) = delete;
 
         // nullopt: replay the complete uncommitted batch on CPU.
-        std::optional<std::vector<u32>> filter(const std::vector<u64> &seeds, const std::atomic<bool> &cancelled, const IVBounds &bounds);
+        std::optional<std::vector<u32>> filter(const std::vector<u64> &seeds, const std::atomic<bool> &cancelled, const IVBounds &bounds, std::optional<IVPlan> plan = {}, SearchOptimization::Family family = SearchOptimization::Family::Wild);
         std::string diagnostics() const;
 
     private:

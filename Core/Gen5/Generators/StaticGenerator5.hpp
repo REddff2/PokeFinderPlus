@@ -20,6 +20,10 @@
 #ifndef STATICGENERATOR5_HPP
 #define STATICGENERATOR5_HPP
 
+#include <Core/Gen5/GPU/IVPlan.hpp>
+
+#include <Core/Util/SearchOptimization.hpp>
+
 #include <Core/Enum/Lead.hpp>
 #include <Core/Gen5/Profile5.hpp>
 #include <Core/Gen5/StaticTemplate5.hpp>
@@ -71,6 +75,11 @@ public:
      * @return Vector of computed states
      */
     std::vector<State5> generate(u64 seed, u32 initialAdvances, u32 maxAdvances) const;
+    const std::array<u8, 6> &getMinIVs() const { return filter.getMinIVs(); }
+    const std::array<u8, 6> &getMaxIVs() const { return filter.getMaxIVs(); }
+    std::optional<GpuWild::IVPlan> gpuIVPlan(u32 initialIVAdvances, u32 maxIVAdvances) const;
+
+    bool optimizedPruningEnabled() const { return smart; }
 
     /**
      * @brief Generates states
@@ -83,6 +92,7 @@ public:
     std::vector<State5> generate(u64 seed, const std::vector<std::pair<u32, std::array<u8, 6>>> &ivs) const;
 
 private:
+    const bool smart = SearchOptimization::pruningEnabled(SearchOptimization::Family::Static);
     std::vector<u8> luckyPowers;
     std::vector<Lead> leads;
 

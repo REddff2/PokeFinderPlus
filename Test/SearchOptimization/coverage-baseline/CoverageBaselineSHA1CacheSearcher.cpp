@@ -1,0 +1,168 @@
+/*
+ * This file is part of PokéFinder
+ * Copyright (C) 2017-2024 by Admiral_Fish, bumba, and EzPzStreamz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#include "CoverageBaselineSHA1CacheSearcher.hpp"
+#include <Core/Enum/Buttons.hpp>
+#include <Core/Enum/DSType.hpp>
+#include <Core/Enum/Game.hpp>
+#include <Core/Enum/Language.hpp>
+#include <Core/Gen5/IVCache.hpp>
+#include <Core/RNG/SHA1.hpp>
+#include <Core/Util/DateTime.hpp>
+#include <fstream>
+
+template <typename Type>
+static void write(std::ofstream &file, Type val)
+{
+    file.write(reinterpret_cast<char *>(&val), sizeof(val));
+}
+
+CoverageBaselineSHA1CacheSearcher::CoverageBaselineSHA1CacheSearcher(const IVCache &ivCache, const Profile5 &profile, const Date &start, const Date &end) :
+    SearcherBase<SHA1Seed>(),
+    profile(profile),
+    keypresses(Keypresses::getKeypresses()),
+    end(end),
+    start(start),
+    initialAdvances(ivCache.getInitialAdvances()),
+    maxAdvances(ivCache.getMaxAdvances())
+{
+    entralinkSeeds = ivCache.getSeeds(profile.getVersion(), CacheType::Entralink);
+    normalSeeds = ivCache.getSeeds(profile.getVersion(), CacheType::Normal);
+    roamerSeeds = ivCache.getSeeds(profile.getVersion(), CacheType::Roamer);
+}
+
+void CoverageBaselineSHA1CacheSearcher::startSearch(int threads)
+{
+    auto days = start.daysTo(end) + 1;
+    if (days < threads)
+    {
+        threads = days;
+    }
+
+    activeThreads.store(threads);
+    for (int i = 0; i < threads; i++)
+    {
+        this->threadContainer.emplace_back([this] {
+            search(start, end);
+            this->activeThreads.fetch_sub(1);
+        });
+    }
+}
+
+void CoverageBaselineSHA1CacheSearcher::writeResults(std::string_view file)
+{
+    auto sort = [](const SHA1Seed &first, const SHA1Seed &second) { return first.seed < second.seed; };
+
+    std::ofstream stream(file.data(), std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
+    if (stream.is_open())
+    {
+        // Write magic identifier: CRC32 of "SHA1Cache"
+        write(stream, 0x3c50a97e);
+
+        // Write cache advances
+        write(stream, initialAdvances);
+        write(stream, maxAdvances);
+
+        // Write profile data
+        write(stream, profile.getMac());
+        write(stream, end);
+        write(stream, start);
+        write(stream, profile.getVersion());
+        write(stream, profile.getTimer0Max());
+        write(stream, profile.getTimer0Min());
+        write(stream, (u8)0);
+        write(stream, profile.getDSType());
+        write(stream, profile.getLanguage());
+        write(stream, profile.getGxStat());
+        write(stream, profile.getVCount());
+        write(stream, profile.getVFrame());
+
+        // Write seed sizes
+        std::ranges::sort(results, sort);
+        std::ranges::sort(normalResults, sort);
+        std::ranges::sort(roamerResults, sort);
+
+        write<u32>(stream, results.size());
+        write<u32>(stream, normalResults.size());
+        write<u32>(stream, roamerResults.size());
+
+        // Write seed data
+        stream.write(reinterpret_cast<char *>(results.data()), results.size() * sizeof(SHA1Seed));
+        stream.write(reinterpret_cast<char *>(normalResults.data()), normalResults.size() * sizeof(SHA1Seed));
+        stream.write(reinterpret_cast<char *>(roamerResults.data()), roamerResults.size() * sizeof(SHA1Seed));
+    }
+}
+
+void CoverageBaselineSHA1CacheSearcher::search(const Date &start, const Date &end)
+{
+    SHA1SSE sha(this->profile);
+    while (true)
+    {
+        Date day = start + index.fetch_add(1, std::memory_order_relaxed);
+        if (day > end)
+        {
+            break;
+        }
+
+        sha.setDate(day);
+        for (u16 timer0 = this->profile.getTimer0Min(); timer0 <= this->profile.getTimer0Max(); timer0++)
+        {
+            sha.setTimer0(timer0, this->profile.getVCount());
+            auto alpha = sha.precompute();
+            for (const auto &keypress : this->keypresses)
+            {
+                sha.setButton(keypress.value);
+                for (u32 time = 0; time < 86400; time += 4)
+                {
+                    if (cancelled.load(std::memory_order_relaxed))
+                    {
+                        return;
+                    }
+
+                    sha.setTime(time, this->profile.getDSType());
+                    auto seeds = sha.hashSeed(alpha);
+
+                    for (u32 i = 0; i < seeds.size(); i++)
+                    {
+                        if (std::ranges::binary_search(entralinkSeeds, seeds[i] >> 32))
+                        {
+                            std::lock_guard<std::mutex> lock(this->mutex);
+                            this->results.emplace_back(toInt(keypress.button), time + i, day.getJD() - Date().getJD(), timer0, seeds[i]);
+                        }
+
+                        if (std::ranges::binary_search(normalSeeds, seeds[i] >> 32))
+                        {
+                            std::lock_guard<std::mutex> lock(this->mutex);
+                            this->normalResults.emplace_back(toInt(keypress.button), time + i, day.getJD() - Date().getJD(), timer0,
+                                                             seeds[i]);
+                        }
+
+                        if (std::ranges::binary_search(roamerSeeds, seeds[i] >> 32))
+                        {
+                            std::lock_guard<std::mutex> lock(this->mutex);
+                            this->roamerResults.emplace_back(toInt(keypress.button), time + i, day.getJD() - Date().getJD(), timer0,
+                                                             seeds[i]);
+                        }
+                    }
+                }
+                this->progress.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    }
+}

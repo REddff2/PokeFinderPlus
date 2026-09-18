@@ -107,6 +107,7 @@ int main(int argc, char **argv)
 {
     try
     {
+        SearchOptimization::setPruningEnabled(true);
         check(argc == 2, "expected retained native result JSON path");
         std::ifstream file(argv[1]); const auto known=json::parse(file);
         check(known.size()==34,"retained positives must contain 34 rows");

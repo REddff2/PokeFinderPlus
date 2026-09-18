@@ -28,7 +28,7 @@
 
 EventGenerator5::EventGenerator5(u32 initialAdvances, u32 maxAdvances, u32 offset, const PGF &pgf, const Profile5 &profile,
                                  const StateFilter &filter, bool optimizedPruning) :
-    Generator(initialAdvances, maxAdvances, offset, Method::None, profile, filter), pgf(pgf), optimizedPruning(optimizedPruning)
+    Generator(initialAdvances, maxAdvances, offset, Method::None, profile, filter), pgf(pgf), optimizedPruning(optimizedPruning && SearchOptimization::pruningEnabled(SearchOptimization::Family::Event))
 {
     if (this->optimizedPruning)
     {

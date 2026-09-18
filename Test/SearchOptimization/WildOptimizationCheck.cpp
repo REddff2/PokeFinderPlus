@@ -365,6 +365,7 @@ static void searchBenchmark()
 int main(int argc,char **argv)
 {
     QCoreApplication app(argc,argv);
+    SearchOptimization::setPruningEnabled(true);
     try
     {
         std::string mode=argc>1?argv[1]:"--verify";

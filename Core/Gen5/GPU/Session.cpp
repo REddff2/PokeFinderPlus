@@ -25,14 +25,14 @@ namespace GpuWild
     Session::Session(Options options) : impl(std::make_unique<Impl>(std::move(options))) {}
     Session::~Session() = default;
 
-    std::optional<std::vector<u32>> Session::filter(const std::vector<u64> &seeds, const std::atomic<bool> &cancelled, const IVBounds &bounds)
+    std::optional<std::vector<u32>> Session::filter(const std::vector<u64> &seeds, const std::atomic<bool> &cancelled, const IVBounds &bounds, std::optional<IVPlan> plan, SearchOptimization::Family family)
     {
-        if (!bounds.valid() || !SearchOptimization::gpuEnabled() || cancelled.load(std::memory_order_relaxed)) return std::nullopt;
+        if ((plan && (!plan->valid() || seeds.size() < 524288)) || !bounds.valid() || !SearchOptimization::gpuEnabled(family) || cancelled.load(std::memory_order_relaxed)) return std::nullopt;
         try
         {
             std::call_once(impl->initialize, [&] {
                 // Check again after acquiring initialization ownership.
-                if (!SearchOptimization::gpuEnabled() || cancelled.load(std::memory_order_relaxed)) return;
+                if (!SearchOptimization::gpuEnabled(family) || cancelled.load(std::memory_order_relaxed)) return;
                 ++impl->attempts;
                 std::lock_guard lock(impl->mutex);
                 try
@@ -54,7 +54,7 @@ namespace GpuWild
                 catch (const std::exception &error) { impl->failure = error.what(); }
             });
 #ifdef _WIN32
-            if (impl->backend) return impl->backend->execute(seeds, bounds, false, &cancelled);
+            if (impl->backend && (!plan || impl->backend->independentIVUseful())) return impl->backend->execute(seeds, bounds, false, &cancelled, plan);
 #endif
         }
         catch (const std::exception &error)

@@ -145,11 +145,65 @@
    </item>
    <item row="5" column="0" colspan="3">
     <widget class="QGroupBox" name="groupBoxSearchOptimization">
-     <property name="title"><string>Gen 5 Smart Search</string></property>
+     <property name="title"><string>Gen 5 Search Optimization</string></property>
      <layout class="QVBoxLayout" name="verticalLayoutSearchOptimization">
       <item><widget class="QCheckBox" name="checkBoxSearchPruning">
        <property name="text"><string>Enable Gen 5 smart search optimizations</string></property>
        <property name="toolTip"><string>Uses verified Gen 5 search optimizations where supported. Unsupported searches use normal PokeFinder behavior.</string></property>
+      </widget></item>
+      <item alignment="Qt::AlignLeft"><widget class="QToolButton" name="toolButtonSearchAdvanced">
+       <property name="text"><string>Advanced options</string></property>
+       <property name="checkable"><bool>true</bool></property>
+       <property name="checked"><bool>false</bool></property>
+       <property name="toolButtonStyle"><enum>Qt::ToolButtonTextBesideIcon</enum></property>
+       <property name="arrowType"><enum>Qt::RightArrow</enum></property>
+       <property name="autoRaise"><bool>true</bool></property>
+       <property name="focusPolicy"><enum>Qt::StrongFocus</enum></property>
+      </widget></item>
+      <item><widget class="QWidget" name="widgetSearchFamilies">
+       <property name="enabled"><bool>false</bool></property>
+       <layout class="QVBoxLayout" name="verticalLayoutSearchFamilies">
+        <property name="leftMargin"><number>22</number></property>
+        <property name="topMargin"><number>0</number></property>
+        <property name="rightMargin"><number>0</number></property>
+        <property name="bottomMargin"><number>0</number></property>
+        <item><widget class="QCheckBox" name="checkBoxSearchWild">
+         <property name="text"><string>Wild</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget></item>
+        <item><widget class="QCheckBox" name="checkBoxSearchStatic">
+         <property name="text"><string>Static</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget></item>
+        <item><widget class="QCheckBox" name="checkBoxSearchEvent">
+         <property name="text"><string>Event</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget></item>
+        <item><widget class="QCheckBox" name="checkBoxSearchEggs">
+         <property name="text"><string>Eggs</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget></item>
+        <item><widget class="QCheckBox" name="checkBoxSearchDreamRadar">
+         <property name="text"><string>Dream Radar</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget></item>
+        <item><widget class="QCheckBox" name="checkBoxSearchHiddenGrotto">
+         <property name="text"><string>Hidden Grotto</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget></item>
+        <item><widget class="QCheckBox" name="checkBoxSearchPickup">
+         <property name="text"><string>Pickup</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget></item>
+        <item><widget class="QCheckBox" name="checkBoxSearchAdjacentSeeds">
+         <property name="text"><string>Adjacent Seeds</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget></item>
+        <item><widget class="QCheckBox" name="checkBoxSearchCacheBuilders">
+         <property name="text"><string>Cache Builders</string></property>
+         <property name="checked"><bool>true</bool></property>
+        </widget></item>
+       </layout>
       </widget></item>
       <item><widget class="QCheckBox" name="checkBoxSearchGpu">
        <property name="text"><string>Enable Gen 5 GPU acceleration</string></property>

@@ -1,7 +1,7 @@
 project(PokeFinderForm)
 
 set(GIT_BRANCH "main")
-set(GIT_COMMIT "v1.2.0")
+set(GIT_COMMIT "v1.3.0")
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/version.h.in

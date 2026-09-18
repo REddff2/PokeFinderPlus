@@ -18,6 +18,8 @@
  */
 
 #include "PickupGenerator.hpp"
+#include "IVRNG.hpp"
+#include "SmartFilter.hpp"
 #include <Core/Enum/Encounter.hpp>
 #include <Core/Enum/Game.hpp>
 #include <Core/Enum/PassPower.hpp>
@@ -129,7 +131,7 @@ static u16 getWildItem(BWRNG &rng, bool bw, Encounter encounter, const PersonalI
 }
 
 static std::optional<WildState5> generateWild(BWRNG &go, u32 advances, u64 seed, u32 ivAdvances, bool bw, u16 tsv,
-                                              const EncounterArea5 &area, const Profile5 &profile)
+                                              const EncounterArea5 &area, const Profile5 &profile, const std::array<u8, 6> *fixedIVs = nullptr, bool materialize = true)
 {
     getPercentRand(go, bw);
 
@@ -172,9 +174,15 @@ static std::optional<WildState5> generateWild(BWRNG &go, u32 advances, u64 seed,
     u8 nature = go.nextUInt(25);
     u16 item = getWildItem(go, bw, area.getEncounter(), info);
 
-    RNGList<u8, MT, 8, gen> rngList(seed >> 32, ivAdvances + (bw ? 0 : 2));
+    // The first encounter is consumed only to position the Pickup RNG.
+    if (!materialize) return std::nullopt;
     std::array<u8, 6> ivs;
-    std::ranges::generate(ivs, [&rngList] { return rngList.next(); });
+    if (fixedIVs) ivs = *fixedIVs;
+    else
+    {
+        RNGList<u8, MT, 8, gen> rngList(seed >> 32, ivAdvances + (bw ? 0 : 2));
+        std::ranges::generate(ivs, [&rngList] { return rngList.next(); });
+    }
 
     return WildState5(0, 255, 255, false, false, advances, ivAdvances, pid, ivs, ability, gender, level, nature, shiny, encounterSlot, item,
                       slot.getSpecie(), slot.getForm(), info);
@@ -215,6 +223,15 @@ std::vector<PickupState> PickupGenerator::generate(u64 seed, u32 ivAdvances) con
     BWRNG itemRNG(seed, advances + initialAdvances + consumed);
     bool bw = (profile.getVersion() & Game::BW) != Game::None;
 
+    std::array<u8, 6> fixedIVs;
+    if (smart && area)
+    {
+        // Every frame and both encounter calls use this identical MT window.
+        Gen5::IVRNG mt(seed >> 32, ivAdvances + (bw ? 0 : 2), 6, true);
+        std::ranges::generate(fixedIVs, [&mt] { return mt.next(); });
+        if (!Gen5::finalIVsPass(filter, fixedIVs)) return {};
+    }
+
     std::vector<PickupState> states;
     for (u32 cnt = 0; cnt <= maxAdvances; cnt++)
     {
@@ -241,11 +258,11 @@ std::vector<PickupState> PickupGenerator::generate(u64 seed, u32 ivAdvances) con
             }
 
             BWRNG pickupRNG(seed, pickupAdvance);
-            generateWild(pickupRNG, pickupAdvance, seed, ivAdvances, bw, tsv, *area, profile);
+            generateWild(pickupRNG, pickupAdvance, seed, ivAdvances, bw, tsv, *area, profile, smart ? &fixedIVs : nullptr, !smart);
             go = pickupRNG;
 
             BWRNG wildRNG(seed, wildAdvance);
-            wild = generateWild(wildRNG, displayAdvance, seed, ivAdvances, bw, tsv, *area, profile);
+            wild = generateWild(wildRNG, displayAdvance, seed, ivAdvances, bw, tsv, *area, profile, smart ? &fixedIVs : nullptr);
         }
 
         std::array<u16, 6> items = {};
@@ -366,4 +383,11 @@ u16 PickupGenerator::getPickupItem(u8 level, u8 itemRand) const
     }
 
     return 0;
+}
+
+std::optional<GpuWild::IVPlan> PickupGenerator::gpuIVPlan() const
+{
+    if (!area) return std::nullopt;
+    // Date searches use the generate() default IV advance of zero.
+    return GpuWild::ivPlan(smart, (profile.getVersion() & Game::BW) != Game::None ? 0 : 2, 0, false, filter);
 }

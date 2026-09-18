@@ -22,6 +22,8 @@
 
 #include <Core/Parents/Searchers/SearcherBase.hpp>
 #include <string>
+#include <Core/Util/SearchOptimization.hpp>
+#include <Core/Gen5/GPU/Session.hpp>
 
 /**
  * @brief Searcher class for SHA1 cache
@@ -29,13 +31,15 @@
 class IVCacheSearcher final : public SearcherBase<std::vector<u32>>
 {
 public:
+    bool optimizedPruningEnabled() const { return smart; }
     /**
      * @brief Construct a new IVCacheSearcher object
      *
      * @param initialAdvances
      * @param maxAdvances Maximum number of advances
      */
-    IVCacheSearcher(u32 initialAdvances, u32 maxAdvances);
+    IVCacheSearcher(u32 initialAdvances, u32 maxAdvances, std::shared_ptr<GpuWild::Session> gpuSession = {});
+    std::shared_ptr<GpuWild::Session> getGpuSession() const { return gpu; }
 
     /**
      * @brief Starts the search
@@ -44,7 +48,7 @@ public:
      * @param start Start date
      * @param end End date
      */
-    void startSearch(int threads);
+    void startSearch(int threads, u32 start = 0, u32 end = 0xffffffff);
 
     /**
      * @brief Writes cache results to file
@@ -54,6 +58,11 @@ public:
     void writeResults(std::string_view file);
 
 private:
+    std::shared_ptr<GpuWild::Session> gpu;
+    bool gpuWorkload = false;
+    bool searchGpu(u32 start, u32 end);
+    void searchSeed(u32 seed);
+    const bool smart = SearchOptimization::pruningEnabled(SearchOptimization::Family::CacheBuilders);
     std::vector<std::vector<u32>> entralink;
     std::vector<std::vector<u32>> roamer;
     u32 initialAdvances;
